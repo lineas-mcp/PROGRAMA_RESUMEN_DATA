@@ -314,7 +314,7 @@ if db:
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
             editor_key = f"ed_lin_{camp_f}"
-            df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.applymap(color_estado, subset=comps_l)
+            df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
             
             df_editado = st.data_editor(
                 df_con_estilo, 
@@ -906,7 +906,7 @@ if db:
                     otros = [col for col in df_transposed.index if col not in ORDEN_EXACTO_GENSET]
                     df_transposed = df_transposed.loc[orden_presente + otros]
                     
-                    st.dataframe(df_transposed.style.applymap(color_estado), use_container_width=True)
+                    st.dataframe(df_transposed.style.map(color_estado), use_container_width=True)
             
                 out_g = BytesIO()
                 with pd.ExcelWriter(out_g, engine='openpyxl') as writer:
