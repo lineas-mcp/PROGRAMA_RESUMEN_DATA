@@ -33,10 +33,16 @@ def conectar_firebase():
     if not firebase_admin._apps:
         try:
             if "firebase" in st.secrets:
-                # Directamente convertimos los secrets a un diccionario
+                # Convertimos el objeto de Secrets a un diccionario común
                 creds_dict = dict(st.secrets["firebase"])
+                
+                # REGLA DE ORO: Reemplazamos los \n de texto por saltos de línea reales
+                # Esto soluciona el error "Unable to load PEM file"
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                
                 cred = credentials.Certificate(creds_dict)
             else:
+                # Si corres localmente con el archivo JSON
                 cred = credentials.Certificate("credenciales.json")
             
             firebase_admin.initialize_app(cred)
