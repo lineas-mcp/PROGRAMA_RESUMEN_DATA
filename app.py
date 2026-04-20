@@ -32,11 +32,17 @@ st.markdown("""
 def conectar_firebase():
     if not firebase_admin._apps:
         try:
-            cred = credentials.Certificate("credenciales.json")
+            if "firebase" in st.secrets:
+                # Directamente convertimos los secrets a un diccionario
+                creds_dict = dict(st.secrets["firebase"])
+                cred = credentials.Certificate(creds_dict)
+            else:
+                cred = credentials.Certificate("credenciales.json")
+            
             firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:
-            st.error(f"Error de conexión: {e}")
+            st.error(f"Error crítico de conexión: {e}")
             return None
     return firestore.client()
 
