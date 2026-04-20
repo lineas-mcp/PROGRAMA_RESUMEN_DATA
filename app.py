@@ -33,20 +33,31 @@ def conectar_firebase():
     if not firebase_admin._apps:
         try:
             if "firebase" in st.secrets:
+                # Extraemos los secretos a un diccionario mutable
                 creds_dict = dict(st.secrets["firebase"])
-                if "private_key" in creds_dict:
-                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                
+                # --- LIMPIEZA DE LLAVE PRIVADA ---
+                raw_key = creds_dict["private_key"]
+                
+                # 1. Si la llave tiene los caracteres '\' y 'n' literales, los convertimos a saltos reales
+                if "\\n" in raw_key:
+                    clean_key = raw_key.replace("\\n", "\n")
+                else:
+                    # 2. Si ya tiene saltos reales pero quizás espacios extra por el formato TOML, 
+                    # aseguramos que las líneas estén limpias
+                    clean_key = raw_key.strip()
+                
+                creds_dict["private_key"] = clean_key
                 
                 cred = credentials.Certificate(creds_dict)
             else:
-                # Caso local
+                # Caso local con archivo físico
                 cred = credentials.Certificate("credenciales.json")
             
             firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:
-            # Aquí imprimimos el error exacto para saber qué pasó
-            st.error(f"Error crítico de conexión: {e}")
+            st.error(f"❌ Error de conexión Firebase: {e}")
             return None
     return firestore.client()
 
