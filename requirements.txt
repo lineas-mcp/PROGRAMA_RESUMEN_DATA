@@ -1,9 +1,8 @@
 streamlit
 firebase-admin
-pandas>=2.0.0
+pandas
 fpdf2
 matplotlib
 altair
 pydeck
-google-generativeai
 openpyxl
