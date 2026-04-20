@@ -948,7 +948,7 @@ if db:
                         })
                     
                     df_comp = pd.DataFrame(comp_data)
-                    st.dataframe(df_comp.style.applymap(color_estado, subset=[f"Estado {c1_s}", f"Estado {c2_s}"]), use_container_width=True, hide_index=True)
+                    st.dataframe(df_comp.style.map(color_estado, subset=[f"Estado {c1_s}", f"Estado {c2_s}"]), use_container_width=True, hide_index=True)
             else:
                 st.info("Sincroniza al menos 2 campañas para comparar evolución.")
         else:
