@@ -1,0 +1,9 @@
+streamlit
+firebase-admin
+pandas
+fpdf
+matplotlib
+altair
+pydeck
+google-generativeai
+openpyxl
