@@ -7,7 +7,6 @@ from datetime import datetime
 from io import BytesIO
 import altair as alt
 import pydeck as pdk 
-import google.generativeai as genai
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import io
