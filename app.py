@@ -33,21 +33,19 @@ def conectar_firebase():
     if not firebase_admin._apps:
         try:
             if "firebase" in st.secrets:
-                # Convertimos el objeto de Secrets a un diccionario común
                 creds_dict = dict(st.secrets["firebase"])
-                
-                # REGLA DE ORO: Reemplazamos los \n de texto por saltos de línea reales
-                # Esto soluciona el error "Unable to load PEM file"
-                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                if "private_key" in creds_dict:
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
                 
                 cred = credentials.Certificate(creds_dict)
             else:
-                # Si corres localmente con el archivo JSON
+                # Caso local
                 cred = credentials.Certificate("credenciales.json")
             
             firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:
+            # Aquí imprimimos el error exacto para saber qué pasó
             st.error(f"Error crítico de conexión: {e}")
             return None
     return firestore.client()
