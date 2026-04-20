@@ -1,7 +1,7 @@
 streamlit
 firebase-admin
-pandas
-fpdf
+pandas>=2.0.0
+fpdf2
 matplotlib
 altair
 pydeck
