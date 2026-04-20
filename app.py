@@ -789,60 +789,7 @@ if db:
                 else:
                     st.info("💡 Las coordenadas no están cargadas. Recuerda vaciar la memoria y descargar nuevamente la campaña.")
 
-            genai.configure(api_key="AIzaSyCf_pbzWHaT1i-k8zBg5qbJaDJ7D0QTE9w")
-
-            def generar_reporte_ia(df_hallazgos, zona, derivacion):
-                # Usamos el modelo estable que detectamos antes
-                model = genai.GenerativeModel('gemini-2.5-flash') 
-                
-                cuerpo_datos = ""
-                for _, fila in df_hallazgos.iterrows():
-                    cuerpo_datos += f"- Poste {fila['Poste']}: {fila['Obs_Final']} | Acción: {fila['Act_Final']}\n"
-                
-                prompt = f"""
-                Eres un Consultor de Mantenimiento Eléctrico en Toromocho. 
-                Analiza estos hallazgos en Zona {zona}, Derivación {derivacion}:
-                {cuerpo_datos}
-                
-                Genera un reporte ejecutivo de 3 párrafos sobre riesgos y prioridades.
-                """
-                
-                # Configuramos para que no bloquee por temas de seguridad técnica
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
-
-                # Intentamos generar con un límite de tiempo
-                response = model.generate_content(
-                    prompt, 
-                    safety_settings=safety_settings,
-                    generation_config={"temperature": 0.2} # Temperatura baja para que no invente cosas
-                )
-                
-                return response.text
-
-            # --- Dentro de tu Tab 1, después del Mapa ---
-            st.divider()
-            st.subheader("🤖 Asistente de Reportes IA")
-
-            # Filtramos solo lo que tiene observaciones reales para el reporte
-            df_para_ia = df_f[df_f["Obs_Final"] != ""].copy()
-
-            if not df_para_ia.empty:
-                if st.button("📝 Generar Informe Ejecutivo con IA", use_container_width=True):
-                    with st.spinner("Analizando hallazgos técnicos..."):
-                        try:
-                            reporte_texto = generar_reporte_ia(df_para_ia, zona_f, der_f)
-                            st.markdown("### 📄 Informe Sugerido")
-                            st.info(reporte_texto)
-                            
-                            # Opción para copiar el reporte
-                            st.button("📋 Copiar al portapapeles (Simulado)", on_click=lambda: st.write("Texto listo para copiar"))
-                        except Exception as e:
-                            st.error(f"Hubo un problema con la API: {e}")
+            
             else:
                 st.success("🌟 No hay hallazgos críticos pendientes para reportar en esta selección.")
         else:
