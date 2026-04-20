@@ -32,27 +32,25 @@ def conectar_firebase():
     if not firebase_admin._apps:
         try:
             if "firebase" in st.secrets:
-                # Extraemos los secretos a un diccionario mutable
-                creds_dict = dict(st.secrets["firebase"])
+                creds = dict(st.secrets["firebase"])
                 
-                # --- LIMPIEZA DE LLAVE PRIVADA ---
-                raw_key = creds_dict["private_key"]
+                # REPARACIÓN MANUAL DE LA LLAVE PEM
+                key = creds["private_key"]
+                if "-----BEGIN PRIVATE KEY-----" in key and "\\n" not in key:
+                    # Extraemos el contenido base64 quitando los encabezados
+                    header = "-----BEGIN PRIVATE KEY-----"
+                    footer = "-----END PRIVATE KEY-----"
+                    content = key.replace(header, "").replace(footer, "").replace(" ", "").strip()
+                    
+                    # Reconstruimos el formato PEM oficial: Cabecera + contenido cada 64 chars + Pie
+                    lines = [content[i:i+64] for i in range(0, len(content), 64)]
+                    key_rebuilt = header + "\n" + "\n".join(lines) + "\n" + footer + "\n"
+                    creds["private_key"] = key_rebuilt
                 
-                # 1. Si la llave tiene los caracteres '\' y 'n' literales, los convertimos a saltos reales
-                if "\\n" in raw_key:
-                    clean_key = raw_key.replace("\\n", "\n")
-                else:
-                    # 2. Si ya tiene saltos reales pero quizás espacios extra por el formato TOML, 
-                    # aseguramos que las líneas estén limpias
-                    clean_key = raw_key.strip()
-                
-                creds_dict["private_key"] = clean_key
-                
-                cred = credentials.Certificate(creds_dict)
+                cred = credentials.Certificate(creds)
             else:
-                # Caso local con archivo físico
                 cred = credentials.Certificate("credenciales.json")
-            
+                
             firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:
