@@ -110,22 +110,27 @@ def procesar_detalles_lineas(texto, lista_comps):
     return res | obs_dict | act_dict
 
 def color_estado(val):
-    if isinstance(val, str):
-        v = val.strip().upper()
-        # Colores Líneas
-        if v == "A": return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
-        if v == "M": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-        if v == "NT": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-        if v == "B": return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
+    if val is None or pd.isna(val):
+        return 'text-align: center; color: #BDC3C7;' # Gris claro para nulos
         
-        # Colores Genset
-        if v in ["CAMBIAR", "INOPERATIVO", "VACÍO", "1/4", "SUCIO"]: 
-            return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: left;'
-        if v in ["NO TIENE", "1/2", "STAND BY"]: 
-            return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: left;'
-        if v in ["TIENE", "OPERATIVO", "FULL", "3/4", "LIMPIO", "TRABAJANDO", "INSPECCIÓN", "INSPECCION Y ARRANQUE"]: 
-            return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: left;'
-    return ''
+    v = str(val).strip().upper()
+    
+    # Colores Líneas
+    if v == "A": return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
+    if v == "M": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
+    if v == "NT": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
+    if v == "B": return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
+    if v == "N/A": return 'color: #BDC3C7; text-align: center;' # 👈 Esto asegura que el N/A sea visible
+    
+    # Colores Genset
+    if v in ["CAMBIAR", "INOPERATIVO", "VACÍO", "1/4", "SUCIO"]: 
+        return 'background-color: #FFDADA; color: #CC0000; font-weight: bold;'
+    if v in ["NO TIENE", "1/2", "STAND BY"]: 
+        return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold;'
+    if v in ["TIENE", "OPERATIVO", "FULL", "3/4", "LIMPIO", "TRABAJANDO", "INSPECCIÓN"]: 
+        return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold;'
+        
+    return 'text-align: center;'
 
 ORDEN_EXACTO_GENSET = [
     "Actividad", "Estado", "Voltaje", "Combustible", "Refrigerante",
