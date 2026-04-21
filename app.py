@@ -120,7 +120,7 @@ def color_estado(val):
         return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
     if v == "M" or v == "NT": 
         return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-    if v == "B" or v == "N": # 👈 Aquí agregamos la N para que se pinte como "Bueno/Normal"
+    if v == "B": # 👈 Aquí agregamos la N para que se pinte como "Bueno/Normal"
         return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
     if v == "N/A": 
         return 'color: #BDC3C7; text-align: center;'
@@ -324,20 +324,27 @@ if db:
             editor_key = f"ed_lin_{camp_f}"
             # PRUEBA ESTO:
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
+             
+            modo_edicion = st.toggle("📝 Activar modo edición")
 
-            # Si usas st.data_editor y no hay color, usa st.dataframe para confirmar:
-            st.dataframe(df_con_estilo, use_container_width=True, hide_index=True)
-                        
-            df_editado = st.data_editor(
-                df_con_estilo, 
-                column_config={
-                    "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
-                    "Campaña": st.column_config.TextColumn("Campaña"),
-                },
-                use_container_width=True, 
-                hide_index=True,
-                key=f"ed_lin_{camp_f}"
-            )
+            df_display = df_f[["ID_Doc"] + cols_visibles]
+
+            if modo_edicion:
+                # Si activo el toggle, muestro el editor (sin colores, pero funcional)
+                st.warning("⚠️ Estás en modo edición. Los colores se ocultan para permitir cambios.")
+                df_editado = st.data_editor(
+                    df_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    key=f"ed_lin_{camp_f}"
+                )
+            else:
+                # Si está apagado, muestro la tabla hermosa con todos tus colores
+                st.dataframe(
+                    df_display.style.map(color_estado, subset=comps_l),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
             cambios = st.session_state[editor_key].get("edited_rows", {})
             if cambios:
