@@ -67,15 +67,15 @@ def procesar_detalles_lineas(texto, lista_comps):
     res = {c: "N/A" for c in lista_comps}
     obs_dict = {f"obs_{c}": "" for c in lista_comps}
     act_dict = {f"act_{c}": "" for c in lista_comps}
+    foto_dict = {f"foto_{c}": "NO FOTO" for c in lista_comps} # 👈 1. Nuevo diccionario para guardar las fotos
     
     if not texto: 
-        return res | obs_dict | act_dict | {"Obs_Final": "", "Act_Final": ""}
+        return res | obs_dict | act_dict | foto_dict | {"Obs_Final": "", "Act_Final": ""}
 
     bloques = re.findall(r'\[(.*?)\]', texto)
     resumen_obs = []
     resumen_act = []
     
-    # Filtros de exclusión total (Cualquier cosa que contenga esto se borra)
     omitir = ["", "N/A", "NINGUNA", "SIN OBS", "SIN OBSERVACION", "SIN OBSERVACIONES", "SIN ACT", "SIN ACTIVIDAD"]
     conv = {"ALTO": "A", "MEDIO": "M", "BAJO": "B", "BUENO": "B", "REGULAR": "M", "MALO": "A", "NT": "NT"}
 
@@ -87,27 +87,30 @@ def procesar_detalles_lineas(texto, lista_comps):
                 # 1. Estado (A, M, B...)
                 res[c_nom] = conv.get(p[1].strip().upper(), p[1].strip().upper())
                 
-                # 2. Extraer Observación (p[2])
+                # 👈 2. Buscar dinámicamente si hay una FOTO en cualquiera de las partes de la cadena
+                for part in p:
+                    if part.strip().startswith("FOTO:"):
+                        foto_dict[f"foto_{c_nom}"] = part.replace("FOTO:", "").strip()
+                
+                # 3. Extraer Observación (p[2])
                 if len(p) >= 3:
                     obs_val = p[2].strip()
-                    # FILTRO: Si es un mensaje de FOTO o está en omitir, no entra
-                    if obs_val.upper() not in omitir and "FOTO:" not in obs_val.upper():
+                    if obs_val.upper() not in omitir and not obs_val.startswith("FOTO:"):
                         obs_dict[f"obs_{c_nom}"] = obs_val
                         resumen_obs.append(f"• {c_nom}: {obs_val}")
                 
-                # 3. Extraer Actividad (p[3])
+                # 4. Extraer Actividad (p[3])
                 if len(p) >= 4:
                     act_val = p[3].replace("ACT:", "").strip()
-                    # FILTRO: Si es un mensaje de FOTO o está en omitir, no entra
-                    if act_val.upper() not in omitir and "FOTO:" not in act_val.upper():
+                    if act_val.upper() not in omitir and not act_val.startswith("FOTO:"):
                         act_dict[f"act_{c_nom}"] = act_val
                         resumen_act.append(f"• {c_nom}: {act_val}")
 
-    # Columnas finales de resumen totalmente limpias
     res["Obs_Final"] = "\n".join(resumen_obs)
     res["Act_Final"] = "\n".join(resumen_act)
     
-    return res | obs_dict | act_dict
+    # Retornamos también el diccionario de fotos
+    return res | obs_dict | act_dict | foto_dict
 
 def color_estado(val):
     if val is None or pd.isna(val):
@@ -325,28 +328,32 @@ if db:
             # PRUEBA ESTO:
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
              
-            modo_edicion = st.toggle("📝 Activar modo edición")
+            modo_edicion = st.toggle("📝 Activar modo edición", help="Oculta los colores para permitir modificar los datos")
 
             df_display = df_f[["ID_Doc"] + cols_visibles]
 
             if modo_edicion:
-                # Si activo el toggle, muestro el editor (sin colores, pero funcional)
-                st.warning("⚠️ Estás en modo edición. Los colores se ocultan para permitir cambios.")
+                st.info("💡 Editando datos. Al guardar, el sistema respetará el formato estricto de corchetes.")
                 df_editado = st.data_editor(
-                    df_display,
-                    use_container_width=True,
+                    df_display, 
+                    column_config={
+                        "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
+                        "Campaña": st.column_config.TextColumn("Campaña"),
+                    },
+                    use_container_width=True, 
                     hide_index=True,
-                    key=f"ed_lin_{camp_f}"
+                    key=editor_key
                 )
             else:
-                # Si está apagado, muestro la tabla hermosa con todos tus colores
-                st.dataframe(
-                    df_display.style.map(color_estado, subset=comps_l),
-                    use_container_width=True,
-                    hide_index=True
-                )
+                # Mostramos la tabla hermosa con colores si no estamos editando
+                df_con_estilo = df_display.style.map(color_estado, subset=comps_l)
+                st.dataframe(df_con_estilo, use_container_width=True, hide_index=True)
 
-            cambios = st.session_state[editor_key].get("edited_rows", {})
+            cambios = {}
+            if modo_edicion:
+                estado_editor = st.session_state.get(editor_key, {})
+                cambios = estado_editor.get("edited_rows", {})
+
             if cambios:
                 st.divider()
                 st.subheader("📝 Resumen de Cambios Pendientes")
@@ -366,44 +373,63 @@ if db:
                 c_btn1, c_btn2 = st.columns(2)
                 with c_btn1:
                     if st.button("💾 Aplicar Cambios Globales", type="primary", use_container_width=True):
-                        with st.spinner("Actualizando Firebase..."):
+                        with st.spinner("Actualizando Firebase con formato estricto..."):
                             for id_f, f_orig, f_mods in validos_para_subir:
                                 update_dict = {}
+                                
+                                # 1. Actualizar datos básicos si fueron modificados
                                 if "Campaña" in f_mods: update_dict["campana"] = f_mods["Campaña"]
                                 if "Inspector" in f_mods: update_dict["inspector"] = f_mods["Inspector"]
                                 if "Zona" in f_mods: update_dict["zona"] = f_mods["Zona"]
                                 if "Derivación" in f_mods: update_dict["equipo"] = f_mods["Derivación"]
                                 if "Poste" in f_mods: update_dict["poste"] = f_mods["Poste"]
                                 
+                                # 2. Reconstrucción del formato [Componente | Estado | Obs | ACT: Act | FOTO: NO FOTO]
                                 if any(c in f_mods for c in comps_l):
                                     f_nueva = f_orig.copy()
+                                    # Aplicar los cambios hechos en el data_editor a nuestra fila temporal
                                     for c, v in f_mods.items(): f_nueva[c] = v
                                     
                                     detalles_lista = []
+                                    
+                                    # Recorremos los 13 componentes uno por uno
                                     for cp in comps_l:
-                                        est = f_nueva.get(cp, "N/A")
-                                        obs = str(f_nueva.get(f"obs_{cp}", "")).strip()
-                                        act = str(f_nueva.get(f"act_{cp}", "")).strip()
-                                        if pd.notna(est) and est != "N/A":
-                                            p = f"[{cp} | {est}"
-                                            if obs and obs not in ["nan", "None", ""]: p += f" | {obs}"
-                                            if act and act not in ["nan", "None", ""]: p += f" | ACT: {act}"
-                                            p += "]"
-                                            detalles_lista.append(p)
+                                        # Sacamos el estado (N, A, M, B, NT)
+                                        foto_str = str(f_nueva.get(f"foto_{cp}", "NO FOTO")).strip()
+                                        est = str(f_nueva.get(cp, "N")).strip().upper()
+                                        
+                                        # --- LÓGICA ESTRICTA DE LA "N" ---
+                                        if est == "N":
+                                            obs = "Sin Obs"
+                                            act = "Ninguna"
+                                        else:
+                                            # Si no es N (ej. es A o M), recuperamos la observación que ya tenía
+                                            obs = str(f_nueva.get(f"obs_{cp}", "Sin Obs")).strip()
+                                            if not obs or obs.lower() in ["nan", "none", ""]: obs = "Sin Obs"
+                                            
+                                            act = str(f_nueva.get(f"act_{cp}", "Ninguna")).strip()
+                                            if not act or act.lower() in ["nan", "none", ""]: act = "Ninguna"
+                                            
+                                        # --- EL FORMATEADOR EXACTO ---
+                                        # Aquí armamos el string tal cual lo pide tu sistema
+                                        bloque_formateado = f"[{cp} | {est} | {obs} | ACT: {act} | FOTO: {foto_str}]"
+                                        detalles_lista.append(bloque_formateado)
+                                        
+                                    # Finalmente unimos todos los corchetes con un espacio de separación
                                     update_dict["detalles_tecnicos"] = " ".join(detalles_lista)
 
+                                # 3. Enviar a Firebase y actualizar memoria local
                                 try:
                                     db.collection("reportes_inspeccion_lineas").document(id_f).update(update_dict)
-                                
+                                    
                                     idx_master = st.session_state.df_master[st.session_state.df_master["ID_Doc"] == id_f].index
                                     for col_m, val_m in f_mods.items():
                                         st.session_state.df_master.loc[idx_master, col_m] = val_m
                                 except Exception as e:
                                     st.error(f"Error al actualizar {id_f}: {e}")
 
-                            st.success("✅ Firebase y Memoria Local sincronizados.")
-                            del st.session_state[editor_key]
-                            st.rerun()
+                        st.success("✅ Firebase actualizado correctamente.")
+                        st.rerun()
 
                 with c_btn2:
                     if st.button("🚩 Cancelar Edición", use_container_width=True):
