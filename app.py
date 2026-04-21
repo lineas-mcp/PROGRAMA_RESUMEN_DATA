@@ -111,24 +111,27 @@ def procesar_detalles_lineas(texto, lista_comps):
 
 def color_estado(val):
     if val is None or pd.isna(val):
-        return 'text-align: center; color: #BDC3C7;' # Gris claro para nulos
+        return 'text-align: center;'
         
     v = str(val).strip().upper()
     
-    # Colores Líneas
-    if v == "A": return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
-    if v == "M": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-    if v == "NT": return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-    if v == "B": return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
-    if v == "N/A": return 'color: #BDC3C7; text-align: center;' # 👈 Esto asegura que el N/A sea visible
+    # --- LÓGICA DE COLORES PARA LÍNEAS (Incluyendo la N) ---
+    if v == "A": 
+        return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
+    if v == "M" or v == "NT": 
+        return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
+    if v == "B" or v == "N": # 👈 Aquí agregamos la N para que se pinte como "Bueno/Normal"
+        return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
+    if v == "N/A": 
+        return 'color: #BDC3C7; text-align: center;'
     
-    # Colores Genset
+    # --- LÓGICA PARA GENSETS ---
     if v in ["CAMBIAR", "INOPERATIVO", "VACÍO", "1/4", "SUCIO"]: 
-        return 'background-color: #FFDADA; color: #CC0000; font-weight: bold;'
+        return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
     if v in ["NO TIENE", "1/2", "STAND BY"]: 
-        return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold;'
+        return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
     if v in ["TIENE", "OPERATIVO", "FULL", "3/4", "LIMPIO", "TRABAJANDO", "INSPECCIÓN"]: 
-        return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold;'
+        return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
         
     return 'text-align: center;'
 
@@ -315,20 +318,21 @@ if db:
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
             cols_visibles = ["Campaña", "Zona", "Derivación", "Inspector", "Poste"] + comps_l + ["Obs_Final", "Act_Final"]
-            df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
-
+            
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
             editor_key = f"ed_lin_{camp_f}"
+            # PRUEBA ESTO:
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
-            
+
+            # Si usas st.data_editor y no hay color, usa st.dataframe para confirmar:
+            st.dataframe(df_con_estilo, use_container_width=True, hide_index=True)
+                        
             df_editado = st.data_editor(
                 df_con_estilo, 
                 column_config={
                     "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
                     "Campaña": st.column_config.TextColumn("Campaña"),
-                    # Puedes añadir configuraciones para que las columnas de estado sean selectboxes
-                    **{c: st.column_config.SelectboxColumn(c, options=["A", "M", "B", "NT", "N/A"]) for c in comps_l}
                 },
                 use_container_width=True, 
                 hide_index=True,
