@@ -310,7 +310,8 @@ if db:
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
             cols_visibles = ["Campaña", "Zona", "Derivación", "Inspector", "Poste"] + comps_l + ["Obs_Final", "Act_Final"]
-            
+            df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
+
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
             editor_key = f"ed_lin_{camp_f}"
@@ -320,11 +321,13 @@ if db:
                 df_con_estilo, 
                 column_config={
                     "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
-                    "Campaña": st.column_config.TextColumn("Campaña", help="Puedes mover este registro a otra campaña")
+                    "Campaña": st.column_config.TextColumn("Campaña"),
+                    # Puedes añadir configuraciones para que las columnas de estado sean selectboxes
+                    **{c: st.column_config.SelectboxColumn(c, options=["A", "M", "B", "NT", "N/A"]) for c in comps_l}
                 },
                 use_container_width=True, 
                 hide_index=True,
-                key=editor_key
+                key=f"ed_lin_{camp_f}"
             )
 
             cambios = st.session_state[editor_key].get("edited_rows", {})
