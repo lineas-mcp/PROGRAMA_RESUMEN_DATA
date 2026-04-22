@@ -535,9 +535,9 @@ if db:
             # ==========================================
 
             sub_analitica, sub_mapa, sub_pdf = st.tabs([
-                "📊 Dashboard Analítico", 
-                "🗺️ Centro de Control Geoespacial", 
-                "📄 Generar Reporte Oficial"
+                "📊", 
+                "🗺️", 
+                "📄"
             ])
 
             with sub_analitica:
