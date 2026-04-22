@@ -533,99 +533,113 @@ if db:
             # ==========================================
             # 📊 SECCIÓN DE ESTADÍSTICAS Y MAPA (TAB 1)
             # ==========================================
-            st.divider()
-            
-            # Texto dinámico reflejando los filtros exactos
-            st.subheader(f"📊 Analítica de Inspección: {camp_f}")
-            st.markdown(f"**Filtros aplicados:** Zona: `{zona_f}` | Derivación: `{der_f}` | **Postes en pantalla:** `{len(df_f)}`")
-            
-            if not df_f.empty:
-                # 1. PREPARACIÓN DE DATOS MAESTROS
-                df_graf = df_f[["Poste", "Inspector"] + comps_l].copy()
-                df_melt = df_graf.melt(id_vars=["Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
-                df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])] # Filtrar valores válidos
 
-                # 2. TARJETAS DE INDICADORES (KPIs)
-                st.markdown("### 🎯 Indicadores Clave de Riesgo (KPIs)")
-                kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                
-                # Cálculos rápidos
-                total_postes = len(df_graf)
-                # Un poste es crítico si tiene al menos UN componente en 'A'
-                postes_criticos = df_graf[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
-                fallas_a = len(df_melt[df_melt["Estado"] == 'A'])
-                fallas_m = len(df_melt[df_melt["Estado"] == 'M'])
-                
-                kpi1.metric("📌 Total Postes Revisados", total_postes)
-                kpi2.metric("🚨 Postes en Riesgo", postes_criticos)
-                kpi3.metric("🔴 Fallas Críticas", fallas_a)
-                kpi4.metric("🟠 Fallas Medias", fallas_m)
-                
+            sub_analitica, sub_mapa, sub_pdf = st.tabs([
+                "📊 Dashboard Analítico", 
+                "🗺️ Centro de Control Geoespacial", 
+                "📄 Generar Reporte Oficial"
+            ])
+
+            with sub_analitica:
+                st.subheader("📊 Analítica de Inspección")
+                st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 st.divider()
-
-                # 3. FILA DE GRÁFICOS: DONA Y PRODUCTIVIDAD
-                col_dona, col_insp = st.columns(2)
                 
-                with col_dona:
-                    st.markdown("**🍩 Distribución de Salud General de la línea**")
-                    st.caption("Proporción de estados evaluados en todos los componentes.")
-                    resumen_estados = df_melt['Estado'].value_counts().reset_index()
-                    resumen_estados.columns = ['Estado', 'Cantidad']
-                    
-                    color_scale_pie = alt.Scale(
-                        domain=['A', 'M', 'B', 'NT'],
-                        range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6']
-                    )
-                    
-                    dona_chart = alt.Chart(resumen_estados).mark_arc(innerRadius=60).encode(
-                        theta=alt.Theta(field="Cantidad", type="quantitative"),
-                        color=alt.Color(field="Estado", type="nominal", scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="right")),
-                        tooltip=['Estado', 'Cantidad']
-                    ).interactive()
-                    st.altair_chart(dona_chart, use_container_width=True)
-
-                with col_insp:
-                    st.markdown("**👷 Inspecciones por Personal**")
-                    st.caption("Cantidad de postes reportados por cada inspector.")
-                    insp_counts = df_graf['Inspector'].value_counts().reset_index()
-                    insp_counts.columns = ['Inspector', 'Postes']
-                    
-                    bar_insp = alt.Chart(insp_counts).mark_bar(color='#01305D').encode(
-                        x=alt.X('Postes:Q', title='Nº de Postes'),
-                        y=alt.Y('Inspector:N', sort='-x', title=''),
-                        tooltip=['Inspector', 'Postes']
-                    ).interactive()
-                    st.altair_chart(bar_insp, use_container_width=True)
-
-                st.divider()
-
-                # 4. FILA DE GRÁFICOS: PROBLEMAS TÉCNICOS
-                col_g1, col_g2 = st.columns(2)
+                # Texto dinámico reflejando los filtros exactos
+                st.subheader(f"📊 Analítica de Inspección: {camp_f}")
+                st.markdown(f"**Filtros aplicados:** Zona: `{zona_f}` | Derivación: `{der_f}` | **Postes en pantalla:** `{len(df_f)}`")
                 
-                with col_g1:
-                    st.markdown("**📉 Top Componentes con Problemas (A y M)**")
-                    df_problemas = df_melt[df_melt["Estado"].isin(["A", "M"])]
-                    if not df_problemas.empty:
-                        conteo_prob = df_problemas.groupby("Componente").size().reset_index(name="Fallas")
-                        bar_chart = alt.Chart(conteo_prob).mark_bar(color='#CC0000').encode(
-                            x=alt.X('Fallas:Q', title='Nº de Observaciones'),
-                            y=alt.Y('Componente:N', sort='-x', title=''),
-                            tooltip=['Componente', 'Fallas']
-                        ).interactive()
-                        st.altair_chart(bar_chart, use_container_width=True)
-                    else:
-                        st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
+                if not df_f.empty:
+                    # 1. PREPARACIÓN DE DATOS MAESTROS
+                    df_graf = df_f[["Poste", "Inspector"] + comps_l].copy()
+                    df_melt = df_graf.melt(id_vars=["Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
+                    df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])] # Filtrar valores válidos
 
-                with col_g2:
-                    st.markdown("**📊 Desglose de Estado por Componente**")
-                    if not df_melt.empty:
-                        stacked_bar = alt.Chart(df_melt).mark_bar().encode(
-                            x=alt.X('count():Q', title='Cantidad de Observaciones'),
-                            y=alt.Y('Componente:N', sort='-x', title=''),
-                            color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
-                            tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
+                    # 2. TARJETAS DE INDICADORES (KPIs)
+                    st.markdown("### 🎯 Indicadores Clave de Riesgo (KPIs)")
+                    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                    
+                    # Cálculos rápidos
+                    total_postes = len(df_graf)
+                    # Un poste es crítico si tiene al menos UN componente en 'A'
+                    postes_criticos = df_graf[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
+                    fallas_a = len(df_melt[df_melt["Estado"] == 'A'])
+                    fallas_m = len(df_melt[df_melt["Estado"] == 'M'])
+                    
+                    kpi1.metric("📌 Total Postes Revisados", total_postes)
+                    kpi2.metric("🚨 Postes en Riesgo", postes_criticos)
+                    kpi3.metric("🔴 Fallas Críticas", fallas_a)
+                    kpi4.metric("🟠 Fallas Medias", fallas_m)
+                    
+                    st.divider()
+
+                    # 3. FILA DE GRÁFICOS: DONA Y PRODUCTIVIDAD
+                    col_dona, col_insp = st.columns(2)
+                    
+                    with col_dona:
+                        st.markdown("**🍩 Distribución de Salud General de la línea**")
+                        st.caption("Proporción de estados evaluados en todos los componentes.")
+                        resumen_estados = df_melt['Estado'].value_counts().reset_index()
+                        resumen_estados.columns = ['Estado', 'Cantidad']
+                        
+                        color_scale_pie = alt.Scale(
+                            domain=['A', 'M', 'B', 'NT'],
+                            range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6']
+                        )
+                        
+                        dona_chart = alt.Chart(resumen_estados).mark_arc(innerRadius=60).encode(
+                            theta=alt.Theta(field="Cantidad", type="quantitative"),
+                            color=alt.Color(field="Estado", type="nominal", scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="right")),
+                            tooltip=['Estado', 'Cantidad']
                         ).interactive()
-                        st.altair_chart(stacked_bar, use_container_width=True)
+                        st.altair_chart(dona_chart, use_container_width=True)
+
+                    with col_insp:
+                        st.markdown("**👷 Inspecciones por Personal**")
+                        st.caption("Cantidad de postes reportados por cada inspector.")
+                        insp_counts = df_graf['Inspector'].value_counts().reset_index()
+                        insp_counts.columns = ['Inspector', 'Postes']
+                        
+                        bar_insp = alt.Chart(insp_counts).mark_bar(color='#01305D').encode(
+                            x=alt.X('Postes:Q', title='Nº de Postes'),
+                            y=alt.Y('Inspector:N', sort='-x', title=''),
+                            tooltip=['Inspector', 'Postes']
+                        ).interactive()
+                        st.altair_chart(bar_insp, use_container_width=True)
+
+                    st.divider()
+
+                    # 4. FILA DE GRÁFICOS: PROBLEMAS TÉCNICOS
+                    col_g1, col_g2 = st.columns(2)
+                    
+                    with col_g1:
+                        st.markdown("**📉 Top Componentes con Problemas (A y M)**")
+                        df_problemas = df_melt[df_melt["Estado"].isin(["A", "M"])]
+                        if not df_problemas.empty:
+                            conteo_prob = df_problemas.groupby("Componente").size().reset_index(name="Fallas")
+                            bar_chart = alt.Chart(conteo_prob).mark_bar(color='#CC0000').encode(
+                                x=alt.X('Fallas:Q', title='Nº de Observaciones'),
+                                y=alt.Y('Componente:N', sort='-x', title=''),
+                                tooltip=['Componente', 'Fallas']
+                            ).interactive()
+                            st.altair_chart(bar_chart, use_container_width=True)
+                        else:
+                            st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
+
+                    with col_g2:
+                        st.markdown("**📊 Desglose de Estado por Componente**")
+                        if not df_melt.empty:
+                            stacked_bar = alt.Chart(df_melt).mark_bar().encode(
+                                x=alt.X('count():Q', title='Cantidad de Observaciones'),
+                                y=alt.Y('Componente:N', sort='-x', title=''),
+                                color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
+                                tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
+                            ).interactive()
+                            st.altair_chart(stacked_bar, use_container_width=True)
+                pass
+                
+            with sub_pdf:
+
                 def generar_reporte_pdf(df_filtrado, camp, zona_sel, der_sel, comps):
                     # Configuración de página segura
                     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -649,7 +663,7 @@ if db:
                     pdf.ln(5)
 
                 
-                     # ==========================================
+                    # ==========================================
                     # 2. SECCIÓN DE GRÁFICOS Y TABLAS RESUMEN
                     # ==========================================
                     pdf.set_font("Arial", "B", 12)
@@ -800,6 +814,9 @@ if db:
                         pdf.ln(5)
 
                     return bytes(pdf.output())
+
+                st.subheader("📄 Generación de Reporte Técnico Oficial")
+                st.caption("Genera un documento formal con resumen ejecutivo, analítica visual y desglose técnico agrupado.")
                 # ==========================================
                 # BOTÓN DE DESCARGA EN INTERFAZ (MEJORADO)
                 # ==========================================
@@ -837,7 +854,11 @@ if db:
                             use_container_width=True,
                             type="primary" # Botón verde
                         )
+                pass
+                
 
+
+            with sub_mapa:
                 # 5. MAPA DE CRITICIDAD GEOREFERENCIADO
                 st.divider()
                 st.subheader("🗺️ Centro de Control Geográfico")
@@ -957,11 +978,10 @@ if db:
                         st.warning("📍 No hay coordenadas para mostrar en el mapa.")
                 else:
                     st.info("💡 Asegúrate de que los datos tengan columnas de Latitud y Longitud.")
-            
-            else:
-                st.success("🌟 No hay hallazgos críticos pendientes para reportar en esta selección.")
+                pass
         else:
-            st.info("⬆️ Selecciona y descarga al menos una campaña en el panel superior.")
+            st.info("⬆️ Selecciona y descarga al menos una campaña en el panel superior para comenzar.")
+
 
     with tab2:
         st.header("Dashboard Técnico de Gensets")
