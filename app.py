@@ -177,7 +177,7 @@ ORDEN_EXACTO_GENSET = [
 # ==========================================
 # 3. INTERFAZ Y DESCARGA (ARQUITECTURA ACUMULATIVA)
 # ==========================================
-st.title("🏔️ Gestión de Activos - Toromocho")
+st.image("logo_chinalco.png", width=300)
 
 if db:
     # --- INICIALIZACIÓN DE LA MEMORIA ---
