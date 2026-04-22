@@ -541,10 +541,6 @@ if db:
             ])
 
             with sub_analitica:
-                st.subheader("📊 Analítica de Inspección")
-                st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
-                st.divider()
-                
                 # Texto dinámico reflejando los filtros exactos
                 st.subheader(f"📊 Analítica de Inspección: {camp_f}")
                 st.markdown(f"**Filtros aplicados:** Zona: `{zona_f}` | Derivación: `{der_f}` | **Postes en pantalla:** `{len(df_f)}`")
@@ -815,9 +811,6 @@ if db:
 
                     return bytes(pdf.output())
 
-                st.subheader("📄 Generación de Reporte Técnico Oficial")
-                st.caption("Genera un documento formal con resumen ejecutivo, analítica visual y desglose técnico agrupado.")
-                # ==========================================
                 # BOTÓN DE DESCARGA EN INTERFAZ (MEJORADO)
                 # ==========================================
                 # --- En tu Tab 1, desplázate hasta el final de la pestaña ---
@@ -861,7 +854,7 @@ if db:
             with sub_mapa:
                 # 5. MAPA DE CRITICIDAD GEOREFERENCIADO
                 st.divider()
-                st.subheader("🗺️ Centro de Control Geográfico")
+                st.subheader("🗺️ Mapa de calor")
         
                 if "Latitud" in df_f.columns and "Longitud" in df_f.columns:
                     df_map = df_f.copy()
