@@ -1,3 +1,5 @@
+import folium
+from streamlit_folium import st_folium
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -175,37 +177,38 @@ if db:
         
         c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
         
+        # OJO: Ahora mostramos TODAS las campañas en el selector, no solo las pendientes
+        # Esto permite seleccionar una que ya está en memoria para "Actualizarla"
         with c1:
-            seleccionados = st.multiselect("Agregar nuevas campañas a la memoria:", camps_pendientes)
+            seleccionados = st.multiselect("Selecciona campañas para descargar o actualizar:", camps_totales)
         
-        # Variables de control para unificar la descarga
         ejecutar_descarga = False
         campanas_a_descargar = []
 
         with c2:
-            if st.button("📥 Descargar Sel.", use_container_width=True):
-                if seleccionados or not st.session_state.gensets_descargados:
+            if st.button("📥 Descargar Nuevas", use_container_width=True):
+                # Filtramos para descargar solo lo que no está en memoria
+                nuevas_sel = [c for c in seleccionados if c not in st.session_state.campanas_descargadas]
+                if nuevas_sel or not st.session_state.gensets_descargados:
                     ejecutar_descarga = True
-                    campanas_a_descargar = seleccionados
+                    campanas_a_descargar = nuevas_sel
                 else:
-                    st.info("Selecciona una campaña de la lista.")
+                    st.info("Las campañas seleccionadas ya están en memoria.")
                     
         with c3:
-            # Opción 1: Buscar nuevas inspecciones en la nube
-            if st.button("🔄 Buscar Nuevas", use_container_width=True):
-                obtener_campanas.clear() # Limpia la caché de la función
+            if st.button("🔄 Buscar en Nube", use_container_width=True):
+                obtener_campanas.clear() 
                 st.rerun()
                 
         with c4:
-            # Opción 2: Descargar de golpe todo lo que falta
-            if st.button("⚡ Descargar Faltantes", use_container_width=True):
-                if camps_pendientes or not st.session_state.gensets_descargados:
+            # Reemplazamos "Descargar Faltantes" por "Actualizar Selección"
+            if st.button("⚡ Actualizar Selección", use_container_width=True, type="primary"):
+                if seleccionados:
                     ejecutar_descarga = True
-                    campanas_a_descargar = camps_pendientes
+                    campanas_a_descargar = seleccionados # Descargará todo lo seleccionado, esté o no en memoria
                 else:
-                    st.info("Ya tienes todas las campañas descargadas.")
+                    st.info("Selecciona al menos una campaña en la lista para actualizarla.")
 
-        # Botón general para vaciar la memoria (fuera de las columnas para más limpieza visual)
         if st.button("🗑️ Vaciar Memoria (Reset Total)", use_container_width=True):
             st.session_state.df_master = pd.DataFrame()
             st.session_state.df_genset = pd.DataFrame()
@@ -217,9 +220,9 @@ if db:
         # LÓGICA DE DESCARGA UNIFICADA
         # ==========================================
         if ejecutar_descarga:
-            with st.spinner("Sincronizando con Firebase... (Solo lo necesario)"):
+            with st.spinner("Sincronizando con Firebase..."):
                 
-                # 1. ACUMULAR NUEVAS LÍNEAS
+                # 1. ACUMULAR O ACTUALIZAR LÍNEAS
                 if campanas_a_descargar:
                     data_l = []
                     comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
@@ -244,9 +247,23 @@ if db:
                             row.update(info)
                             data_l.append(row)
                     
-                    nuevo_df_l = pd.DataFrame(data_l)
-                    st.session_state.df_master = pd.concat([st.session_state.df_master, nuevo_df_l], ignore_index=True)
-                    st.session_state.campanas_descargadas.extend(campanas_a_descargar)
+                    if data_l:
+                        nuevo_df_l = pd.DataFrame(data_l)
+                        
+                        if st.session_state.df_master.empty:
+                            st.session_state.df_master = nuevo_df_l
+                        else:
+                            # Concatenamos la data vieja con la nueva
+                            st.session_state.df_master = pd.concat([st.session_state.df_master, nuevo_df_l], ignore_index=True)
+                            
+                            # 🔥 EL FILTRO ANTI-DUPLICADOS:
+                            # Si un ID_Doc se repite, Pandas elimina el viejo y se queda con el 'last' (el que acabamos de descargar)
+                            st.session_state.df_master = st.session_state.df_master.drop_duplicates(subset=["ID_Doc"], keep="last").reset_index(drop=True)
+                    
+                    # Actualizamos la lista de memoria sin duplicar nombres
+                    for c in campanas_a_descargar:
+                        if c not in st.session_state.campanas_descargadas:
+                            st.session_state.campanas_descargadas.append(c)
 
                 # 2. DESCARGAR GENSETS (Solo si no se han descargado antes)
                 if not st.session_state.gensets_descargados:
@@ -333,26 +350,49 @@ if db:
             df_display = df_f[["ID_Doc"] + cols_visibles]
 
             if modo_edicion:
-                st.info("💡 Editando datos. Al guardar, el sistema respetará el formato estricto de corchetes.")
-                df_editado = st.data_editor(
-                    df_display, 
-                    column_config={
+                # 1. SISTEMA DE SEGURIDAD
+                clave = st.text_input("🔑 Ingresa la clave de autorización:", type="password")
+                
+                # Puedes cambiar "Admin2026" por la clave que prefieras para tu equipo
+                if clave == "Admin2026":
+                    st.success("✅ Acceso concedido. Ahora puedes editar estados, observaciones y actividades al detalle.")
+                    
+                    # 2. CONSTRUIR COLUMNAS DINÁMICAS PARA EDICIÓN
+                    columnas_edicion = ["ID_Doc", "Campaña", "Zona", "Derivación", "Poste"]
+                    config_cols = {
                         "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
                         "Campaña": st.column_config.TextColumn("Campaña"),
-                    },
-                    use_container_width=True, 
-                    hide_index=True,
-                    key=editor_key
-                )
+                        "Poste": st.column_config.TextColumn("Poste"),
+                    }
+                    
+                    # Agregamos dinámicamente las columnas ocultas de obs_ y act_ al editor
+                    for cp in comps_l:
+                        columnas_edicion.extend([cp, f"obs_{cp}", f"act_{cp}"])
+                        config_cols[cp] = st.column_config.SelectboxColumn(f"⚙️ {cp}", options=["A", "M", "B", "NT", "N/A", "N"])
+                        config_cols[f"obs_{cp}"] = st.column_config.TextColumn(f"📝 Obs {cp}")
+                        config_cols[f"act_{cp}"] = st.column_config.TextColumn(f"🛠️ Act {cp}")
+
+                    df_display_edit = df_f[columnas_edicion]
+                    
+                    df_editado = st.data_editor(
+                        df_display_edit, 
+                        column_config=config_cols,
+                        use_container_width=True, 
+                        hide_index=True,
+                        key=editor_key
+                    )
+                elif clave != "":
+                    st.error("❌ Clave incorrecta. Acceso denegado.")
             else:
-                # Mostramos la tabla hermosa con colores si no estamos editando
-                df_con_estilo = df_display.style.map(color_estado, subset=comps_l)
+                # Modo solo lectura con los colores y columnas resumidas
+                df_display_view = df_f[["ID_Doc"] + cols_visibles]
+                df_con_estilo = df_display_view.style.map(color_estado, subset=comps_l)
                 st.dataframe(df_con_estilo, use_container_width=True, hide_index=True)
 
             cambios = {}
-            if modo_edicion:
-                estado_editor = st.session_state.get(editor_key, {})
-                cambios = estado_editor.get("edited_rows", {})
+            # Solo procesamos cambios si el modo edición está activo y la clave es correcta
+            if modo_edicion and st.session_state.get(editor_key):
+                cambios = st.session_state[editor_key].get("edited_rows", {})
 
             if cambios:
                 st.divider()
@@ -377,54 +417,73 @@ if db:
                             for id_f, f_orig, f_mods in validos_para_subir:
                                 update_dict = {}
                                 
-                                # 1. Actualizar datos básicos si fueron modificados
                                 if "Campaña" in f_mods: update_dict["campana"] = f_mods["Campaña"]
                                 if "Inspector" in f_mods: update_dict["inspector"] = f_mods["Inspector"]
                                 if "Zona" in f_mods: update_dict["zona"] = f_mods["Zona"]
                                 if "Derivación" in f_mods: update_dict["equipo"] = f_mods["Derivación"]
                                 if "Poste" in f_mods: update_dict["poste"] = f_mods["Poste"]
                                 
-                                # 2. Reconstrucción del formato [Componente | Estado | Obs | ACT: Act | FOTO: NO FOTO]
-                                if any(c in f_mods for c in comps_l):
+                                # --- INICIO DE LA RECONSTRUCCIÓN ---
+                                texto_obs_final = f_orig.get("Obs_Final", "")
+                                texto_act_final = f_orig.get("Act_Final", "")
+
+                                # Si se modificó el estado, la observación o la actividad de algún componente
+                                if any(c.replace("obs_", "").replace("act_", "") in comps_l for c in f_mods):
                                     f_nueva = f_orig.copy()
-                                    # Aplicar los cambios hechos en el data_editor a nuestra fila temporal
                                     for c, v in f_mods.items(): f_nueva[c] = v
                                     
                                     detalles_lista = []
-                                    
-                                    # Recorremos los 13 componentes uno por uno
+                                    resumen_obs_nuevo = []
+                                    resumen_act_nuevo = []
+                                    omitir = ["", "N/A", "NINGUNA", "SIN OBS", "SIN OBSERVACION", "SIN OBSERVACIONES", "SIN ACT", "SIN ACTIVIDAD"]
+
                                     for cp in comps_l:
-                                        # Sacamos el estado (N, A, M, B, NT)
-                                        foto_str = str(f_nueva.get(f"foto_{cp}", "NO FOTO")).strip()
-                                        est = str(f_nueva.get(cp, "N")).strip().upper()
+                                        est = str(f_nueva.get(cp, "N/A")).strip().upper()
                                         
-                                        # --- LÓGICA ESTRICTA DE LA "N" ---
+                                        foto_str = str(f_nueva.get(f"foto_{cp}", "NO FOTO")).strip()
+                                        if not foto_str or foto_str.lower() in ["nan", "none", ""]: 
+                                            foto_str = "NO FOTO"
+                                        
                                         if est == "N":
                                             obs = "Sin Obs"
                                             act = "Ninguna"
                                         else:
-                                            # Si no es N (ej. es A o M), recuperamos la observación que ya tenía
                                             obs = str(f_nueva.get(f"obs_{cp}", "Sin Obs")).strip()
-                                            if not obs or obs.lower() in ["nan", "none", ""]: obs = "Sin Obs"
+                                            if not obs or obs.lower() in ["nan", "none"]: obs = "Sin Obs"
                                             
                                             act = str(f_nueva.get(f"act_{cp}", "Ninguna")).strip()
-                                            if not act or act.lower() in ["nan", "none", ""]: act = "Ninguna"
+                                            if not act or act.lower() in ["nan", "none"]: act = "Ninguna"
                                             
-                                        # --- EL FORMATEADOR EXACTO ---
-                                        # Aquí armamos el string tal cual lo pide tu sistema
+                                        # 1. Armamos el bloque para Firebase
                                         bloque_formateado = f"[{cp} | {est} | {obs} | ACT: {act} | FOTO: {foto_str}]"
                                         detalles_lista.append(bloque_formateado)
                                         
-                                    # Finalmente unimos todos los corchetes con un espacio de separación
+                                        # 2. Armamos las viñetas para la tabla visual
+                                        if obs.upper() not in omitir:
+                                            resumen_obs_nuevo.append(f"• {cp}: {obs}")
+                                        if act.upper() not in omitir:
+                                            resumen_act_nuevo.append(f"• {cp}: {act}")
+                                        
                                     update_dict["detalles_tecnicos"] = " ".join(detalles_lista)
+                                    texto_obs_final = "\n".join(resumen_obs_nuevo)
+                                    texto_act_final = "\n".join(resumen_act_nuevo)
 
-                                # 3. Enviar a Firebase y actualizar memoria local
                                 try:
+                                    # Subir a Firebase
                                     db.collection("reportes_inspeccion_lineas").document(id_f).update(update_dict)
                                     
+                                    # ACTUALIZAR MEMORIA LOCAL AL INSTANTE
                                     idx_master = st.session_state.df_master[st.session_state.df_master["ID_Doc"] == id_f].index
+                                    
+                                    # a) Actualizamos las celdas individuales editadas
                                     for col_m, val_m in f_mods.items():
                                         st.session_state.df_master.loc[idx_master, col_m] = val_m
+                                        
+                                    # b) Actualizamos los resúmenes para que se vean al apagar el switch
+                                    if any(c.replace("obs_", "").replace("act_", "") in comps_l for c in f_mods):
+                                        st.session_state.df_master.loc[idx_master, "Obs_Final"] = texto_obs_final
+                                        st.session_state.df_master.loc[idx_master, "Act_Final"] = texto_act_final
+
                                 except Exception as e:
                                     st.error(f"Error al actualizar {id_f}: {e}")
 
@@ -434,8 +493,6 @@ if db:
                 with c_btn2:
                     if st.button("🚩 Cancelar Edición", use_container_width=True):
                         st.rerun()
-            
-            st.divider()
             
             if not df_f.empty:
                 out_l = BytesIO()
@@ -759,78 +816,112 @@ if db:
 
                 # 5. MAPA DE CRITICIDAD GEOREFERENCIADO
                 st.divider()
-                st.markdown("**🗺️ Mapa de Calor: Criticidad de Activos**")
-                
-                # Verificamos si existen las columnas de coordenadas
+                st.subheader("🗺️ Centro de Control Geográfico")
+        
                 if "Latitud" in df_f.columns and "Longitud" in df_f.columns:
-                    # Limpieza profunda de datos geográficos
                     df_map = df_f.copy()
-                    
-                    # Forzamos conversión a numérico y eliminamos lo que no sea una coordenada válida
                     df_map['lat'] = pd.to_numeric(df_map['Latitud'], errors='coerce')
                     df_map['lon'] = pd.to_numeric(df_map['Longitud'], errors='coerce')
                     df_map = df_map.dropna(subset=['lat', 'lon'])
-                    
-                    # Filtro de seguridad: eliminamos coordenadas que estén en 0,0
                     df_map = df_map[(df_map['lat'] != 0) & (df_map['lon'] != 0)]
-                    
-                    if not df_map.empty:
-                        # Cálculo de criticidad para el color y tamaño
-                        def calcular_criticidad(row):
-                            peso = 0
-                            for c in comps_l:
-                                if row.get(c) == 'A': peso += 5 # Mayor peso a fallas críticas
-                                elif row.get(c) == 'M': peso += 2
-                            return peso
-                        
-                        df_map['Criticidad'] = df_map.apply(calcular_criticidad, axis=1)
-                        
-                        # Colores basados en el estándar de mantenimiento (RGB)
-                        def asignar_color(peso):
-                            if peso >= 5: return [255, 0, 0, 160]    # Rojo intenso
-                            if peso >= 2: return [255, 165, 0, 160]  # Naranja
-                            return [0, 128, 0, 160]                  # Verde
-                        
-                        df_map['color'] = df_map['Criticidad'].apply(asignar_color)
-                        
-                        # Definición de la capa de puntos (Scatterplot)
-                        # Usamos 'radius_min_pixels' para que siempre sean visibles al hacer zoom out
-                        layer = pdk.Layer(
-                            'ScatterplotLayer',
-                            data=df_map,
-                            get_position='[lon, lat]',
-                            get_color='color',
-                            get_radius=30,  # Radio fijo en metros
-                            radius_min_pixels=5,
-                            radius_max_pixels=15,
-                            pickable=True
-                        )
-                        
-                        # Centrado automático en los activos de la zona seleccionada
-                        view_state = pdk.ViewState(
-                            latitude=df_map['lat'].mean(),
-                            longitude=df_map['lon'].mean(),
-                            zoom=15,
-                            pitch=0
-                        )
-                        
-                        # Renderizado del mapa con estilo libre de tokens
-                        st.pydeck_chart(pdk.Deck(
-                            map_style=None, # Usa el mapa base por defecto de Streamlit (OpenStreetMap)
-                            initial_view_state=view_state,
-                            layers=[layer],
-                            tooltip={
-                                "html": "<b>Poste:</b> {Poste} <br/> "
-                                        "<b>Inspector:</b> {Inspector} <br/> "
-                                        "<b>Riesgo Acumulado:</b> {Criticidad}",
-                                "style": {"color": "white", "backgroundColor": "#01305D"}
-                            }
-                        ))
-                    else:
-                        st.warning("📍 No se encontraron coordenadas válidas (Lat/Lon) para los postes seleccionados.")
-                else:
-                    st.info("💡 Las coordenadas no están cargadas. Recuerda vaciar la memoria y descargar nuevamente la campaña.")
 
+                    if not df_map.empty:
+                        # --- TOOLBOX DE COMPONENTES ---
+                        with st.expander("🛠️ Toolbox: Filtros de Capas del Mapa", expanded=True):
+                            col_t1, col_t2 = st.columns([2, 1])
+                            with col_t1:
+                                componentes_visibles = st.multiselect(
+                                    "Selecciona componentes para evaluar riesgo:",
+                                    options=comps_l,
+                                    default=["Estructura", "Aislador", "Cable", "PAT"],
+                                    help="El mapa calculará el color basado solo en los componentes seleccionados."
+                                )
+                            with col_t2:
+                                estilo_mapa = st.selectbox(
+                                    "Estilo del Mapa:",
+                                    options=["satellite", "road", "dark", "light"],
+                                    index=0
+                                )
+
+                        # --- LÓGICA DE CRITICIDAD DINÁMICA ---
+                        def calcular_riesgo_selectivo(row):
+                            peso = 0
+                            detalles_criticos = []
+                            for c in componentes_visibles:
+                                estado = str(row.get(c, "B")).upper()
+                                if estado == 'A': 
+                                    peso += 10
+                                    detalles_criticos.append(f"🔴 {c} (Crítico)")
+                                elif estado == 'M': 
+                                    peso += 3
+                                    detalles_criticos.append(f"🟠 {c} (Medio)")
+                            return pd.Series([peso, "<br>".join(detalles_criticos) if detalles_criticos else "✅ Sin fallas en selección"])
+
+                        # Aplicamos el cálculo solo sobre lo que el usuario eligió en el Toolbox
+                        df_map[['Riesgo_Total', 'Detalle_HTML']] = df_map.apply(calcular_riesgo_selectivo, axis=1)
+
+                        # Asignación de colores (RGBA)
+                        def color_dinamico(peso):
+                            if peso >= 10: return [255, 0, 0, 200]    # Rojo (Falla crítica en selección)
+                            if peso >= 3: return [255, 165, 0, 200]  # Naranja (Falla media en selección)
+                            return [0, 255, 0, 150]                 # Verde (Todo OK en selección)
+
+                        df_map['color_punto'] = df_map['Riesgo_Total'].apply(color_dinamico)
+
+                        # --- CONFIGURACIÓN DEL DECK (MAPA) ---
+                        # Usamos estilos de Mapbox que simulan Google Maps (Satellite)
+                        # Nota: 'satellite' es muy útil para ver la ubicación real de las torres en la mina
+                        map_style_url = f"mapbox://styles/mapbox/{estilo_mapa}-v9" if estilo_mapa != "road" else None
+
+                        # --- CONFIGURACIÓN DEL MAPA CON FOLIUM (100% GRATIS) ---
+                        # Usamos el satélite de ESRI que no requiere llaves ni tokens
+                        esri_tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        
+                        # Creamos el mapa base centrado en los postes
+                        m = folium.Map(
+                            location=[df_map['lat'].mean(), df_map['lon'].mean()],
+                            zoom_start=15,
+                            tiles=esri_tiles,
+                            attr='Esri World Imagery'
+                        )
+
+                        # Agregamos los puntos uno por uno con colores dinámicos
+                        for _, row in df_map.iterrows():
+                            # Definimos el color según el riesgo calculado en tu Toolbox
+                            color_punto = 'green'
+                            if row['Riesgo_Total'] >= 10: 
+                                color_punto = 'red'
+                            elif row['Riesgo_Total'] >= 3: 
+                                color_punto = 'orange'
+
+                            # Tooltip en formato HTML
+                            tooltip_html = f"""
+                                <div style='font-family: Arial; font-size: 12px;'>
+                                    <b>Poste:</b> {row['Poste']} <br/>
+                                    <b>Derivación:</b> {row['Derivación']} <br/>
+                                    <hr style='margin: 4px 0;'/>
+                                    <b>Hallazgos:</b><br/>
+                                    {row['Detalle_HTML']}
+                                </div>
+                            """
+
+                            # Dibujamos el círculo en el mapa
+                            folium.CircleMarker(
+                                location=[row['lat'], row['lon']],
+                                radius=6 + (row['Riesgo_Total'] * 0.4), # Tamaño dinámico
+                                color=color_punto,
+                                fill=True,
+                                fill_color=color_punto,
+                                fill_opacity=0.8,
+                                tooltip=folium.Tooltip(tooltip_html)
+                            ).add_to(m)
+
+                        # Renderizamos el mapa en Streamlit
+                        st_folium(m, use_container_width=True, height=600)
+                    else:
+                        st.warning("📍 No hay coordenadas para mostrar en el mapa.")
+                else:
+                    st.info("💡 Asegúrate de que los datos tengan columnas de Latitud y Longitud.")
             
             else:
                 st.success("🌟 No hay hallazgos críticos pendientes para reportar en esta selección.")
