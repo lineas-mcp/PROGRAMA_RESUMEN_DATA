@@ -13,6 +13,8 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import io
 import numpy as np
+from folium.plugins import HeatMap
+
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILO JSJSJSJS
 # ==========================================
@@ -876,25 +878,36 @@ if db:
                         # --- CONFIGURACIÓN DEL MAPA CON FOLIUM (100% GRATIS) ---
                         # Usamos el satélite de ESRI que no requiere llaves ni tokens
                         esri_tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                        
-                        # Creamos el mapa base centrado en los postes
+                
+                        # 1. FIX DEL ZOOM: Agregamos max_zoom=17 para que no se borre el satélite
                         m = folium.Map(
                             location=[df_map['lat'].mean(), df_map['lon'].mean()],
                             zoom_start=15,
+                            max_zoom=17, # 👈 Tope de seguridad
                             tiles=esri_tiles,
                             attr='Esri World Imagery'
                         )
 
-                        # Agregamos los puntos uno por uno con colores dinámicos
-                        for _, row in df_map.iterrows():
-                            # Definimos el color según el riesgo calculado en tu Toolbox
-                            color_punto = 'green'
-                            if row['Riesgo_Total'] >= 10: 
-                                color_punto = 'red'
-                            elif row['Riesgo_Total'] >= 3: 
-                                color_punto = 'orange'
+                        # 2. VERDADERO MAPA DE CALOR (Las manchas difuminadas)
+                        # Filtramos solo los postes que tienen algún riesgo según el Toolbox
+                        df_calor = df_map[df_map['Riesgo_Total'] > 0]
+                        if not df_calor.empty:
+                            # Folium HeatMap pide una lista de [Latitud, Longitud, Peso/Criticidad]
+                            datos_calor = df_calor[['lat', 'lon', 'Riesgo_Total']].values.tolist()
+                            
+                            HeatMap(
+                                datos_calor,
+                                radius=25,     # Tamaño de la mancha de calor
+                                blur=15,       # Nivel de difuminado
+                                max_zoom=17,
+                                min_opacity=0.4
+                            ).add_to(m)
 
-                            # Tooltip en formato HTML
+                        # 3. PUNTOS INTERACTIVOS (Para poder hacer clic y leer el reporte)
+                        for _, row in df_map.iterrows():
+                            # Hacemos los círculos más pequeños y oscuros para que resalten sobre el mapa de calor
+                            color_borde = 'white' if row['Riesgo_Total'] >= 10 else 'black'
+                            
                             tooltip_html = f"""
                                 <div style='font-family: Arial; font-size: 12px;'>
                                     <b>Poste:</b> {row['Poste']} <br/>
@@ -905,14 +918,14 @@ if db:
                                 </div>
                             """
 
-                            # Dibujamos el círculo en el mapa
                             folium.CircleMarker(
                                 location=[row['lat'], row['lon']],
-                                radius=6 + (row['Riesgo_Total'] * 0.4), # Tamaño dinámico
-                                color=color_punto,
+                                radius=4, # Círculo más pequeño porque la mancha de calor ya indica el área
+                                color=color_borde,
+                                weight=1,
                                 fill=True,
-                                fill_color=color_punto,
-                                fill_opacity=0.8,
+                                fill_color='black',
+                                fill_opacity=0.6,
                                 tooltip=folium.Tooltip(tooltip_html)
                             ).add_to(m)
 
