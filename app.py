@@ -177,7 +177,7 @@ ORDEN_EXACTO_GENSET = [
 # ==========================================
 # 3. INTERFAZ Y DESCARGA (ARQUITECTURA ACUMULATIVA)
 # ==========================================
-st.image("logo_chinalco.png", width=150)
+st.image("logo_chinalco.png", width=250)
 
 if db:
     # --- INICIALIZACIÓN DE LA MEMORIA ---
