@@ -24,7 +24,29 @@ st.markdown("""
     <style>
     .main { background-color: #FFFFFF; }
     h1, h2, h3 { color: #01305D; border-bottom: 2px solid #01305D; padding-bottom: 10px; }
-    .stTabs [aria-selected="true"] { background-color: #01305D !important; color: white !important; font-weight: bold; }
+    
+    /* Diseño mejorado para todos los Tabs (Principales y Sub-tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 15px;
+        background-color: #f8f9fa;
+        padding: 10px 15px;
+        border-radius: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 0 20px;
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: #01305D !important; 
+        color: white !important; 
+        font-weight: bold; 
+        border: none;
+    }
+    
     .stButton>button { background-color: #01305D; color: white; border-radius: 5px; width: 100%; }
     .stDownloadButton>button { background-color: #28a745; color: white; border-radius: 5px; }
     .dataframe th { text-align: left !important; background-color: #f0f2f6 !important; }
@@ -356,7 +378,7 @@ if db:
                 clave = st.text_input("🔑 Ingresa la clave de autorización:", type="password")
                 
                 # Puedes cambiar "Admin2026" por la clave que prefieras para tu equipo
-                if clave == "Admin2026":
+                if clave == "CHINALCO":
                     st.success("✅ Acceso concedido. Ahora puedes editar estados, observaciones y actividades al detalle.")
                     
                     # 2. CONSTRUIR COLUMNAS DINÁMICAS PARA EDICIÓN
