@@ -6,3 +6,5 @@ matplotlib
 altair
 pydeck
 openpyxl
+folium
+streamlit-folium
