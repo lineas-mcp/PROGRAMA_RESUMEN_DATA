@@ -871,7 +871,7 @@ if db:
                                 componentes_visibles = st.multiselect(
                                     "Selecciona componentes para evaluar riesgo:",
                                     options=comps_l,
-                                    default=["Estructura", "Aislador", "Cable", "PAT"],
+                                    default=[],
                                     help="El mapa calculará el color basado solo en los componentes seleccionados."
                                 )
                             with col_t2:
