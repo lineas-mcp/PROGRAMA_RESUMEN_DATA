@@ -261,6 +261,8 @@ if db:
                                 "ID_Doc": doc.id, 
                                 "Campaña": d.get("campana"), 
                                 "Inspector": d.get("inspector"), 
+                                "Orden Trabajo": d.get("orden_trabajo", "N/A"),
+                                "Tipo Poste": d.get("tipo_poste", "N/A"),
                                 "Fecha": dt, 
                                 "Zona": d.get("zona", "N/A").strip(), 
                                 "Derivación": d.get("equipo", "N/A").strip(), 
@@ -361,7 +363,7 @@ if db:
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
-            cols_visibles = ["Campaña", "Zona", "Derivación", "Inspector", "Poste"] + comps_l + ["Obs_Final", "Act_Final"]
+            cols_visibles = ["Fecha","Orden Trabajo","Campaña", "Zona", "Derivación", "Inspector", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
             
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
@@ -602,9 +604,7 @@ if db:
                             ).interactive()
                             st.altair_chart(bar_insp, use_container_width=True)
 
-                    st.write("") # Pequeño espacio
-
-                    # --- FILA DE GRÁFICOS 2 ---
+                    st.write("") 
                     col_g1, col_g2 = st.columns(2)
                     
                     with col_g1:
@@ -640,7 +640,6 @@ if db:
             with sub_pdf:
 
                 def generar_reporte_pdf(df_filtrado, camp, zona_sel, der_sel, comps):
-                    # Configuración de página segura
                     pdf = FPDF(orientation='P', unit='mm', format='A4')
                     pdf.set_margins(left=15, top=15, right=15)
                     pdf.add_page()
