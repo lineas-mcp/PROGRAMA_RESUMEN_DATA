@@ -361,7 +361,7 @@ if db:
             with c3: der_f = st.selectbox("Derivación:", ["TODAS"] + sorted(df_f["Derivación"].unique().tolist()))
             df_f = df_f[df_f["Derivación"] == der_f] if der_f != "TODAS" else df_f
             
-            comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
+            comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
             cols_visibles = ["Fecha","Orden Trabajo","Campaña", "Zona", "Derivación", "Inspector", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
             
