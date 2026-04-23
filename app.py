@@ -366,7 +366,7 @@ if db:
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
             editor_key = f"ed_lin_{camp_f}"
-            # PRUEBA ESTO:
+
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
              
             modo_edicion = st.toggle("📝 Activar modo edición", help="Oculta los colores para permitir modificar los datos")
@@ -374,14 +374,11 @@ if db:
             df_display = df_f[["ID_Doc"] + cols_visibles]
 
             if modo_edicion:
-                # 1. SISTEMA DE SEGURIDAD
                 clave = st.text_input("🔑 Ingresa la clave de autorización:", type="password")
                 
-                # Puedes cambiar "Admin2026" por la clave que prefieras para tu equipo
                 if clave == "CHINALCO":
                     st.success("✅ Acceso concedido. Ahora puedes editar estados, observaciones y actividades al detalle.")
                     
-                    # 2. CONSTRUIR COLUMNAS DINÁMICAS PARA EDICIÓN
                     columnas_edicion = ["ID_Doc", "Campaña", "Zona", "Derivación", "Poste"]
                     config_cols = {
                         "ID_Doc": st.column_config.TextColumn("ID Documento", disabled=True),
@@ -389,7 +386,6 @@ if db:
                         "Poste": st.column_config.TextColumn("Poste"),
                     }
                     
-                    # Agregamos dinámicamente las columnas ocultas de obs_ y act_ al editor
                     for cp in comps_l:
                         columnas_edicion.extend([cp, f"obs_{cp}", f"act_{cp}"])
                         config_cols[cp] = st.column_config.SelectboxColumn(f"⚙️ {cp}", options=["A", "M", "B", "NT", "N/A", "N"])
@@ -540,98 +536,105 @@ if db:
                 "📄"
             ])
 
+            # ------------------------------------------
+            # SUB-TAB B: ANALÍTICA Y KPIs (CON MARCOS / CARDS)
+            # ------------------------------------------
             with sub_analitica:
-                # Texto dinámico reflejando los filtros exactos
-                st.subheader(f"📊 Analítica de Inspección: {camp_f}")
-                st.markdown(f"**Filtros aplicados:** Zona: `{zona_f}` | Derivación: `{der_f}` | **Postes en pantalla:** `{len(df_f)}`")
+                st.subheader("📊 Analítica de Inspección")
+                st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 
                 if not df_f.empty:
                     # 1. PREPARACIÓN DE DATOS MAESTROS
                     df_graf = df_f[["Poste", "Inspector"] + comps_l].copy()
                     df_melt = df_graf.melt(id_vars=["Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
-                    df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])] # Filtrar valores válidos
+                    df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])]
 
-                    # 2. TARJETAS DE INDICADORES (KPIs)
-                    st.markdown("### 🎯 Indicadores Clave de Riesgo (KPIs)")
-                    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                    
                     # Cálculos rápidos
                     total_postes = len(df_graf)
-                    # Un poste es crítico si tiene al menos UN componente en 'A'
                     postes_criticos = df_graf[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
                     fallas_a = len(df_melt[df_melt["Estado"] == 'A'])
                     fallas_m = len(df_melt[df_melt["Estado"] == 'M'])
-                    
-                    kpi1.metric("📌 Total Postes Revisados", total_postes)
-                    kpi2.metric("🚨 Postes en Riesgo", postes_criticos)
-                    kpi3.metric("🔴 Fallas Críticas", fallas_a)
-                    kpi4.metric("🟠 Fallas Medias", fallas_m)
-                    
-                    st.divider()
 
-                    # 3. FILA DE GRÁFICOS: DONA Y PRODUCTIVIDAD
+                    # --- MARCO 1: KPIs ---
+                    with st.container(border=True):
+                        st.markdown("### 🎯 Indicadores Clave de Riesgo")
+                        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                        kpi1.metric("📌 Total Postes Revisados", total_postes)
+                        kpi2.metric("🚨 Postes en Riesgo", postes_criticos)
+                        kpi3.metric("🔴 Fallas Críticas", fallas_a)
+                        kpi4.metric("🟠 Fallas Medias", fallas_m)
+                    
+                    st.write("") # Pequeño espacio
+
+                    # --- FILA DE GRÁFICOS 1 ---
                     col_dona, col_insp = st.columns(2)
                     
                     with col_dona:
-                        st.markdown("**🍩 Distribución de Salud General de la línea**")
-                        st.caption("Proporción de estados evaluados en todos los componentes.")
-                        resumen_estados = df_melt['Estado'].value_counts().reset_index()
-                        resumen_estados.columns = ['Estado', 'Cantidad']
-                        
-                        color_scale_pie = alt.Scale(
-                            domain=['A', 'M', 'B', 'NT'],
-                            range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6']
-                        )
-                        
-                        dona_chart = alt.Chart(resumen_estados).mark_arc(innerRadius=60).encode(
-                            theta=alt.Theta(field="Cantidad", type="quantitative"),
-                            color=alt.Color(field="Estado", type="nominal", scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="right")),
-                            tooltip=['Estado', 'Cantidad']
-                        ).interactive()
-                        st.altair_chart(dona_chart, use_container_width=True)
+                        # MARCO 2: Dona
+                        with st.container(border=True):
+                            st.markdown("**🍩 Salud General de la Línea**")
+                            resumen_estados = df_melt['Estado'].value_counts().reset_index()
+                            resumen_estados.columns = ['Estado', 'Cantidad']
+                            
+                            color_scale_pie = alt.Scale(
+                                domain=['A', 'M', 'B', 'NT'],
+                                range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6']
+                            )
+                            
+                            dona_chart = alt.Chart(resumen_estados).mark_arc(innerRadius=60).encode(
+                                theta=alt.Theta(field="Cantidad", type="quantitative"),
+                                color=alt.Color(field="Estado", type="nominal", scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="right")),
+                                tooltip=['Estado', 'Cantidad']
+                            ).interactive()
+                            st.altair_chart(dona_chart, use_container_width=True)
 
                     with col_insp:
-                        st.markdown("**👷 Inspecciones por Personal**")
-                        st.caption("Cantidad de postes reportados por cada inspector.")
-                        insp_counts = df_graf['Inspector'].value_counts().reset_index()
-                        insp_counts.columns = ['Inspector', 'Postes']
-                        
-                        bar_insp = alt.Chart(insp_counts).mark_bar(color='#01305D').encode(
-                            x=alt.X('Postes:Q', title='Nº de Postes'),
-                            y=alt.Y('Inspector:N', sort='-x', title=''),
-                            tooltip=['Inspector', 'Postes']
-                        ).interactive()
-                        st.altair_chart(bar_insp, use_container_width=True)
+                        # MARCO 3: Productividad
+                        with st.container(border=True):
+                            st.markdown("**👷 Inspecciones por Personal**")
+                            insp_counts = df_graf['Inspector'].value_counts().reset_index()
+                            insp_counts.columns = ['Inspector', 'Postes']
+                            
+                            bar_insp = alt.Chart(insp_counts).mark_bar(color='#01305D').encode(
+                                x=alt.X('Postes:Q', title='Nº de Postes'),
+                                y=alt.Y('Inspector:N', sort='-x', title=''),
+                                tooltip=['Inspector', 'Postes']
+                            ).interactive()
+                            st.altair_chart(bar_insp, use_container_width=True)
 
-                    st.divider()
+                    st.write("") # Pequeño espacio
 
-                    # 4. FILA DE GRÁFICOS: PROBLEMAS TÉCNICOS
+                    # --- FILA DE GRÁFICOS 2 ---
                     col_g1, col_g2 = st.columns(2)
                     
                     with col_g1:
-                        st.markdown("**📉 Top Componentes con Problemas (A y M)**")
-                        df_problemas = df_melt[df_melt["Estado"].isin(["A", "M"])]
-                        if not df_problemas.empty:
-                            conteo_prob = df_problemas.groupby("Componente").size().reset_index(name="Fallas")
-                            bar_chart = alt.Chart(conteo_prob).mark_bar(color='#CC0000').encode(
-                                x=alt.X('Fallas:Q', title='Nº de Observaciones'),
-                                y=alt.Y('Componente:N', sort='-x', title=''),
-                                tooltip=['Componente', 'Fallas']
-                            ).interactive()
-                            st.altair_chart(bar_chart, use_container_width=True)
-                        else:
-                            st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
+                        # MARCO 4: Top Fallas
+                        with st.container(border=True):
+                            st.markdown("**📉 Top Componentes con Problemas**")
+                            df_problemas = df_melt[df_melt["Estado"].isin(["A", "M"])]
+                            if not df_problemas.empty:
+                                conteo_prob = df_problemas.groupby("Componente").size().reset_index(name="Fallas")
+                                bar_chart = alt.Chart(conteo_prob).mark_bar(color='#CC0000').encode(
+                                    x=alt.X('Fallas:Q', title='Nº de Observaciones'),
+                                    y=alt.Y('Componente:N', sort='-x', title=''),
+                                    tooltip=['Componente', 'Fallas']
+                                ).interactive()
+                                st.altair_chart(bar_chart, use_container_width=True)
+                            else:
+                                st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
 
                     with col_g2:
-                        st.markdown("**📊 Desglose de Estado por Componente**")
-                        if not df_melt.empty:
-                            stacked_bar = alt.Chart(df_melt).mark_bar().encode(
-                                x=alt.X('count():Q', title='Cantidad de Observaciones'),
-                                y=alt.Y('Componente:N', sort='-x', title=''),
-                                color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
-                                tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
-                            ).interactive()
-                            st.altair_chart(stacked_bar, use_container_width=True)
+                        # MARCO 5: Desglose por Componente
+                        with st.container(border=True):
+                            st.markdown("**📊 Desglose de Estado por Componente**")
+                            if not df_melt.empty:
+                                stacked_bar = alt.Chart(df_melt).mark_bar().encode(
+                                    x=alt.X('count():Q', title='Cantidad de Obs.'),
+                                    y=alt.Y('Componente:N', sort='-x', title=''),
+                                    color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
+                                    tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
+                                ).interactive()
+                                st.altair_chart(stacked_bar, use_container_width=True)
                 pass
                 
             with sub_pdf:
