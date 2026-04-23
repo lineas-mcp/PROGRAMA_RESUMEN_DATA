@@ -360,9 +360,6 @@ if db:
             
             with c3: der_f = st.selectbox("Derivación:", ["TODAS"] + sorted(df_f["Derivación"].unique().tolist()))
             df_f = df_f[df_f["Derivación"] == der_f] if der_f != "TODAS" else df_f
-
-            if "Fecha" in df_f.columns:
-                df_f["Fecha"] = pd.to_datetime(df_f["Fecha"]).dt.strftime("%d/%m/%Y")
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
