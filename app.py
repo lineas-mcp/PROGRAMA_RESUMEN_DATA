@@ -361,9 +361,6 @@ if db:
             if "Fecha" in df_f.columns:
                 df_f["Fecha"] = pd.to_datetime(df_f["Fecha"]).dt.strftime("%d/%m/%Y")
             
-            # LISTA ACTUALIZZZZZADA
-            cols_visibles = ["Fecha", "Orden Trabajo", "Campaña", "Zona", "Derivación", "Inspector", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
-            
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
             cols_visibles = ["Fecha","Orden Trabajo","Campaña", "Zona", "Derivación", "Inspector", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
