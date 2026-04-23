@@ -249,7 +249,7 @@ if db:
                 # 1. ACUMULAR O ACTUALIZAR LÍNEAS
                 if campanas_a_descargar:
                     data_l = []
-                    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
+                    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
                     docs_l = db.collection("reportes_inspeccion_lineas").where("campana", "in", campanas_a_descargar).stream()
                     
                     for doc in docs_l:
@@ -361,7 +361,7 @@ if db:
             with c3: der_f = st.selectbox("Derivación:", ["TODAS"] + sorted(df_f["Derivación"].unique().tolist()))
             df_f = df_f[df_f["Derivación"] == der_f] if der_f != "TODAS" else df_f
             
-            comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
+            comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
             cols_visibles = ["Fecha","Orden Trabajo","Campaña", "Zona", "Derivación", "Inspector", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
             
@@ -1122,7 +1122,7 @@ if db:
                     st.divider()
                     st.subheader(f"Comparación Técnica - Poste: {p_s}")
                     
-                    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinacion", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
+                    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
                     comp_data = []
                     for cp in comps_l:
                         comp_data.append({
