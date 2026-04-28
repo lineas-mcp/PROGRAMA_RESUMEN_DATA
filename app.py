@@ -15,6 +15,7 @@ from datetime import datetime
 import io
 import numpy as np
 from folium.plugins import HeatMap
+from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from io import BytesIO
 import math
@@ -112,6 +113,85 @@ def formatear_fecha_inspeccion(timestamp_ms):
     
 
 def descargar_excel_formateado(df_filtrado):
+    # --- ORDENAMIENTO NATURAL ---
+    def extraer_numero(texto):
+        numeros = re.findall(r'\d+', str(texto))
+        return int(numeros[0]) if numeros else 0
+
+    df_para_excel = df_filtrado.copy()
+    df_para_excel['orden_temp'] = df_para_excel['Poste'].apply(extraer_numero)
+    df_para_excel = df_para_excel.sort_values(by=['orden_temp', 'Poste']).reset_index(drop=True)
+
+    wb = load_workbook('plantilla_chinalco.xlsx')
+    ws = wb.active
+    
+    # 👈 NUEVO: Definimos los colores exactos (Hexadecimal sin el #)
+    fill_rojo = PatternFill(start_color="CC0000", end_color="CC0000", fill_type="solid")
+    fill_naranja = PatternFill(start_color="E67E22", end_color="E67E22", fill_type="solid")
+    fill_verde = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
+    fill_plomo = PatternFill(start_color="BDC3C7", end_color="BDC3C7", fill_type="solid")
+
+    # ... (código de cabeceras igual que antes) ...
+    ots = " / ".join([str(x) for x in df_para_excel['Orden Trabajo'].unique() if x != 'N/A'])
+    encargados = " / ".join([str(x) for x in df_para_excel['Inspector'].unique()])
+    tag_linea = " / ".join([str(x) for x in df_para_excel['Derivación'].unique()])
+    fechas_unicas = list(set([str(x).split(' ')[0] for x in df_para_excel['Fecha']]))
+    fechas = " / ".join(fechas_unicas)
+
+    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", 
+               "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", 
+               "Seccionador", "Señalética", "Otros"]
+
+    chunk_size = 20
+    for i in range(0, len(df_para_excel), chunk_size):
+        chunk = df_para_excel.iloc[i:i+chunk_size]
+        numero_pagina = i // chunk_size
+        offset = numero_pagina * 25 
+        
+        ws.cell(row=6, column=20 + offset, value=f"OT: {ots}")
+        ws.cell(row=7, column=1 + offset, value=f"ENCARGADO RESPONSABLE: {encargados}")
+        ws.cell(row=7, column=20 + offset, value=f"FECHA: {fechas}")
+        ws.cell(row=8, column=1 + offset, value=f"TAG DE LINEA: {tag_linea}")
+        
+        fila_base = 17
+        for j, (_, row) in enumerate(chunk.iterrows()):
+            fila_actual = fila_base + j
+            
+            ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
+            ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
+            
+            # --- NUEVO: LLENADO Y COLOREADO DE ESTADOS ---
+            col_comp = 5 + offset
+            for comp in comps_l:
+                valor = str(row.get(comp, '')).strip().upper()
+                celda = ws.cell(row=fila_actual, column=col_comp, value=valor)
+                
+                # Aplicamos el color según la letra
+                if valor in ["B", "N"]:
+                    celda.fill = fill_verde
+                elif valor in ["M", "NT"]:
+                    celda.fill = fill_naranja
+                elif valor == "A":
+                    celda.fill = fill_rojo
+                elif valor in ["N/A", "NA"]:
+                    celda.fill = fill_plomo
+                    
+                col_comp += 1
+                
+            obs = str(row.get('Obs_Final', '')).strip()
+            act = str(row.get('Act_Final', '')).strip()
+            texto_r = ""
+            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}"
+            if act and act.lower() != "nan" and act != "": 
+                separador = "\n" if texto_r else ""
+                texto_r += f"{separador}ACT: {act}"
+            
+            ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
+            
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
     # --- ORDENAMIENTO NATURAL PARA EVITAR P1, P10, P11 ---
     # Creamos una columna temporal para ordenar numéricamente
     def extraer_numero(texto):
@@ -681,15 +761,42 @@ if db:
                         st.rerun()
             
             if not df_f.empty:
-                # Botón de Descarga Formateada
-                if st.download_button(
-                    label="📥 Descargar Formato FOR-ELC-034 Oficial",
-                    data=descargar_excel_formateado(df_f),
-                    file_name=f"FOR-ELC-034_{camp_f}_{zona_f}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                ):
-                    st.toast("Descarga iniciada...", icon="✅") 
+                st.divider()
+                st.subheader("📥 Exportación de Datos (Excel)")
+                
+                # Creamos dos columnas para poner los botones lado a lado
+                col_btn1, col_btn2 = st.columns(2)
+                
+                # ==========================================
+                # BOTÓN 1: EXCEL EN BRUTO (DATA PURA)
+                # ==========================================
+                with col_btn1:
+                    out_raw = BytesIO()
+                    with pd.ExcelWriter(out_raw, engine='openpyxl') as writer:
+                        # Usamos la data limpia que ves en pantalla
+                        df_ex_l = df_f[["ID_Doc"] + cols_visibles].copy() 
+                        df_ex_l.to_excel(writer, index=False, sheet_name="Data_Lineas")
+                    
+                    st.download_button(
+                        label="📊 Descargar Data en Bruto (Excel Simple)",
+                        data=out_raw.getvalue(),
+                        file_name=f"Data_Cruda_{camp_f}_{zona_f}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                # ==========================================
+                # BOTÓN 2: EXCEL FORMATEADO (CHINALCO)
+                # ==========================================
+                with col_btn2:
+                    st.download_button(
+                        label="📄 Descargar Formato FOR-ELC-034 Oficial",
+                        data=descargar_excel_formateado(df_f),
+                        file_name=f"FOR-ELC-034_{camp_f}_{zona_f}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary" # Este saldrá resaltado (verde/azul según tu tema)
+                    )
+            else:
+                st.warning("⚠️ No hay datos con los filtros actuales para descargar.")
             
             # ==========================================
             # 📊 SECCIÓN DE ESTADÍSTICAS Y MAPA (TAB 1)
