@@ -195,7 +195,7 @@ ORDEN_EXACTO_GENSET = [
 ]
 
 # ==========================================
-# 3. INTERFAZ Y DESCARGA (ARQUITECTURA ACUMULATIVA)
+# 3. INTERFAZ Y DESCARGA
 # ==========================================
 st.image("logo_chinalco.png", width=250)
 
@@ -206,13 +206,12 @@ if db:
     if "campanas_descargadas" not in st.session_state: st.session_state.campanas_descargadas = []
     if "gensets_descargados" not in st.session_state: st.session_state.gensets_descargados = False
 
-    # --- OBTENER LISTA DE CAMPAÑAS ---
     @st.cache_data(ttl=600)
     def obtener_campanas():
         docs_c = db.collection("reportes_inspeccion_lineas").select(["campana"]).stream()
         return sorted(list(set([d.to_dict().get("campana") for d in docs_c if d.to_dict().get("campana")])), reverse=True)
-    # --- OBTENER DICCIONARIO DE USUARIOS (DNI -> Nombre) ---
-    @st.cache_data(ttl=86400) # Se actualiza cada hora para no gastar lecturas
+
+    @st.cache_data(ttl=86400)
     def obtener_mapa_usuarios():
         try:
             docs_u = db.collection("usuarios").stream()
@@ -418,11 +417,48 @@ if db:
             st.info("💡 Ahora puedes editar la **Campaña** o el **Poste** directamente en la tabla. El sistema usa el ID interno para no perder el rastro.")
 
             editor_key = f"ed_lin_{camp_f}"
-
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
-             
-            modo_edicion = st.toggle("📝 Activar modo edición", help="Oculta los colores para permitir modificar los datos")
-
+            
+            # --- NUEVA LEYENDA Y BOTÓN DE EDICIÓN ---
+            col_leyenda, col_vacio, col_toggle = st.columns([3, 1, 2]) # Distribuimos el ancho
+            
+            with col_leyenda:
+                # Recreamos la tabla de criticidad exacta con HTML
+                st.markdown("""
+                <style>
+                .tabla-leyenda { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; margin-bottom: 10px;}
+                .tabla-leyenda th { background-color: #01305D; color: white; text-align: center; padding: 4px; border: 1px solid #ccc; font-weight: bold;}
+                .tabla-leyenda td { padding: 4px 8px; border: 1px solid #ccc; }
+                .l-b { background-color: #2E7D32; color: white; font-weight: bold; text-align: center; } /* Verde */
+                .l-m { background-color: #E67E22; color: white; font-weight: bold; text-align: center; } /* Naranja */
+                .l-a { background-color: #CC0000; color: white; font-weight: bold; text-align: center; } /* Rojo */
+                .l-n { background-color: #ffffff; color: black; font-weight: bold; text-align: center; } /* Blanco */
+                .l-na { background-color: #E5E7E9; color: black; font-weight: bold; text-align: center; } /* Plomo */
+                .l-nt { background-color: #E67E22; color: white; font-weight: bold; text-align: center; } /* Naranja NT */
+                </style>
+                
+                <table class="tabla-leyenda">
+                    <tr><th colspan="4">CRITICIDAD</th></tr>
+                    <tr>
+                        <td>BAJA</td><td class="l-b">B</td>
+                        <td>NORMAL</td><td class="l-n">N</td>
+                    </tr>
+                    <tr>
+                        <td>MODERADA</td><td class="l-m">M</td>
+                        <td>NO APLICA:</td><td class="l-na">N/A</td>
+                    </tr>
+                    <tr>
+                        <td>ALTA</td><td class="l-a">A</td>
+                        <td>NO TIENE:</td><td class="l-nt">NT</td>
+                    </tr>
+                </table>
+                """, unsafe_allow_html=True)
+                
+            with col_toggle:
+                st.write("") # Un pequeño espacio invisible para que el switch baje un poco y se alinee
+                st.write("")
+                modo_edicion = st.toggle("📝 Activar modo edición", help="Oculta los colores para permitir modificar los datos")
+            
             df_display = df_f[["ID_Doc"] + cols_visibles]
 
             if modo_edicion:
