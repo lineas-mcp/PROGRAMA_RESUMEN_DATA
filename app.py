@@ -99,7 +99,7 @@ def formatear_fecha_inspeccion(timestamp_ms):
         fecha_utc = datetime.fromtimestamp(segundos, tz=timezone.utc)
         
         # 3. Aplicamos la zona horaria de Perú (UTC-5)
-        zona_peru = timezone(timedelta(hours=0))
+        zona_peru = timezone(timedelta(hours=-5))
         fecha_peru = fecha_utc.astimezone(zona_peru)
         
         # 4. Devolvemos el texto bonito (Día/Mes/Año Hora:Minuto:Segundo)
@@ -276,9 +276,14 @@ if db:
                     for doc in docs_l:
                         d = doc.to_dict()
                         if d.get("poste"):
-                            dt = pd.to_datetime(d.get("fecha_inspeccion", 0), unit='ms')
+                            # 1. Sacamos el número puro de Firebase
+                            numero_ms = d.get("fecha_inspeccion", 0)
+                            
+                            # 2. Lo pasamos por nuestra función de zona horaria (UTC-5)
+                            fecha_real = formatear_fecha_inspeccion(numero_ms)
+                            
+                            # 3. Procesamos los detalles técnicos
                             info = procesar_detalles_lineas(d.get("detalles_tecnicos", ""), comps_l)
-                            fecha_real = formatear_fecha_inspeccion(dt)
                             row = {
                                 "ID_Doc": doc.id, 
                                 "Campaña": d.get("campana"), 
