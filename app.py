@@ -167,7 +167,7 @@ def descargar_excel_formateado(df_filtrado):
                 celda = ws.cell(row=fila_actual, column=col_comp, value=valor)
                 
                 # Aplicamos el color según la letra
-                if valor in ["B", "N"]:
+                if valor in ["B"]:
                     celda.fill = fill_verde
                 elif valor in ["M", "NT"]:
                     celda.fill = fill_naranja
