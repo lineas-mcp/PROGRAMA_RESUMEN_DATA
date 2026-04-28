@@ -15,6 +15,9 @@ from datetime import datetime
 import io
 import numpy as np
 from folium.plugins import HeatMap
+from openpyxl import load_workbook
+from io import BytesIO
+import math
 
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILO JSJSJSJS
@@ -106,6 +109,74 @@ def formatear_fecha_inspeccion(timestamp_ms):
         return fecha_peru.strftime('%d/%m/%Y %H:%M:%S')
     except:
         return str(timestamp_ms)    
+    
+
+def descargar_excel_formateado(df_filtrado):
+    # 1. Cargamos tu plantilla oficial (que ya tiene los colores y logos)
+    wb = load_workbook('plantilla_chinalco.xlsx')
+    ws = wb.active
+    
+    # 2. Preparamos los datos consolidados para la cabecera
+    # Sacamos los valores únicos por si hay varios inspectores o fechas
+    ots = " / ".join([str(x) for x in df_filtrado['Orden Trabajo'].unique() if x != 'N/A'])
+    encargados = " / ".join([str(x) for x in df_filtrado['Inspector'].unique()])
+    tag_linea = " / ".join([str(x) for x in df_filtrado['Derivación'].unique()])
+    
+    # Extraemos solo el día de la fecha (ej: de "27/04/2026 08:04" sacamos "27/04/2026")
+    fechas_unicas = list(set([str(x).split(' ')[0] for x in df_filtrado['Fecha']]))
+    fechas = " / ".join(fechas_unicas)
+
+    # 3. Lista de componentes (Orden exacto de la E a la Q = 13 columnas)
+    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", 
+               "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", 
+               "Seccionador", "Señalética", "Otros"]
+
+    # 4. LÓGICA DE PAGINACIÓN HORIZONTAL (Bloques de 20)
+    chunk_size = 20
+    
+    for i in range(0, len(df_filtrado), chunk_size):
+        chunk = df_filtrado.iloc[i:i+chunk_size]
+        numero_pagina = i // chunk_size
+        offset = numero_pagina * 25 # 🔥 Aquí está tu lógica de salto (25 columnas a la derecha)
+        
+        # --- LLENAR CABECERAS ---
+        # Fila, Columna base + offset
+        ws.cell(row=6, column=20 + offset, value=ots)        # T6 -> AS6 ...
+        ws.cell(row=7, column=1 + offset, value=encargados)  # A7 -> Z7 ...
+        ws.cell(row=7, column=20 + offset, value=fechas)     # T7 -> AS7 ...
+        ws.cell(row=8, column=1 + offset, value=tag_linea)   # A8 -> Z8 ...
+        
+        # --- LLENAR FILAS DE POSTES (17 al 36) ---
+        fila_base = 17
+        for j, (_, row) in enumerate(chunk.iterrows()):
+            fila_actual = fila_base + j
+            
+            # B: N° Poste y C: Tipo
+            ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
+            ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
+            
+            # E hasta Q: Llenado dinámico de estados (A, M, B)
+            col_comp = 5 + offset
+            for comp in comps_l:
+                ws.cell(row=fila_actual, column=col_comp, value=row.get(comp, ''))
+                col_comp += 1
+                
+            # R: Concatenar Observación y Actividad
+            obs = str(row.get('Obs_Final', '')).strip()
+            act = str(row.get('Act_Final', '')).strip()
+            
+            texto_r = ""
+            # Limpiamos para que no salga la palabra "nan"
+            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}\n"
+            if act and act.lower() != "nan" and act != "": texto_r += f"ACT: {act}"
+            
+            ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
+            
+    # 5. Guardar y retornar
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
 # ==========================================
 # 2. PROCESADORES TÉCNICOS
 # ==========================================
@@ -420,7 +491,7 @@ if db:
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
             
             # --- NUEVA LEYENDA Y BOTÓN DE EDICIÓN ---
-            col_leyenda, col_vacio, col_toggle = st.columns([3, 1, 2]) # Distribuimos el ancho
+            col_leyenda, col_vacio, col_toggle = st.columns([3, 1, 3]) # Distribuimos el ancho
             
             with col_leyenda:
                 # Recreamos la tabla de criticidad exacta con HTML
@@ -603,15 +674,15 @@ if db:
                         st.rerun()
             
             if not df_f.empty:
-                out_l = BytesIO()
-                with pd.ExcelWriter(out_l, engine='openpyxl') as writer:
-                    df_ex_l = df_f[["ID_Doc"] + cols_visibles].copy() 
-                    # ✅ Ya no quitamos la zona horaria porque "Fecha" ya es un texto limpio
-                    df_ex_l.to_excel(writer, index=False, sheet_name="Lineas")
-                
-                st.download_button("📥 Descargar Excel de Líneas", out_l.getvalue(), "Reporte_Lineas.xlsx")
-            else:
-                st.warning("⚠️ No hay datos con los filtros actuales para descargar el Excel.")
+                # Botón de Descarga Formateada
+                if st.download_button(
+                    label="📥 Descargar Formato FOR-ELC-034 Oficial",
+                    data=descargar_excel_formateado(df_f),
+                    file_name=f"FOR-ELC-034_{camp_f}_{zona_f}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                ):
+                    st.toast("Descarga iniciada...", icon="✅")
             
             # ==========================================
             # 📊 SECCIÓN DE ESTADÍSTICAS Y MAPA (TAB 1)
