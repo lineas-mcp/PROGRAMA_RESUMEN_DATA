@@ -112,67 +112,74 @@ def formatear_fecha_inspeccion(timestamp_ms):
     
 
 def descargar_excel_formateado(df_filtrado):
-    # 1. Cargamos tu plantilla oficial (que ya tiene los colores y logos)
+    # --- ORDENAMIENTO NATURAL PARA EVITAR P1, P10, P11 ---
+    # Creamos una columna temporal para ordenar numéricamente
+    def extraer_numero(texto):
+        numeros = re.findall(r'\d+', str(texto))
+        return int(numeros[0]) if numeros else 0
+
+    # Ordenamos el dataframe tal como lo quieres ver
+    df_para_excel = df_filtrado.copy()
+    df_para_excel['orden_temp'] = df_para_excel['Poste'].apply(extraer_numero)
+    df_para_excel = df_para_excel.sort_values(by=['orden_temp', 'Poste']).reset_index(drop=True)
+
+    # 1. Cargamos la plantilla
     wb = load_workbook('plantilla_chinalco.xlsx')
     ws = wb.active
     
-    # 2. Preparamos los datos consolidados para la cabecera
-    # Sacamos los valores únicos por si hay varios inspectores o fechas
-    ots = " / ".join([str(x) for x in df_filtrado['Orden Trabajo'].unique() if x != 'N/A'])
-    encargados = " / ".join([str(x) for x in df_filtrado['Inspector'].unique()])
-    tag_linea = " / ".join([str(x) for x in df_filtrado['Derivación'].unique()])
-    
-    # Extraemos solo el día de la fecha (ej: de "27/04/2026 08:04" sacamos "27/04/2026")
-    fechas_unicas = list(set([str(x).split(' ')[0] for x in df_filtrado['Fecha']]))
+    # 2. Preparamos los datos consolidados
+    ots = " / ".join([str(x) for x in df_para_excel['Orden Trabajo'].unique() if x != 'N/A'])
+    encargados = " / ".join([str(x) for x in df_para_excel['Inspector'].unique()])
+    tag_linea = " / ".join([str(x) for x in df_para_excel['Derivación'].unique()])
+    fechas_unicas = list(set([str(x).split(' ')[0] for x in df_para_excel['Fecha']]))
     fechas = " / ".join(fechas_unicas)
 
-    # 3. Lista de componentes (Orden exacto de la E a la Q = 13 columnas)
     comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", 
                "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", 
                "Seccionador", "Señalética", "Otros"]
 
-    # 4. LÓGICA DE PAGINACIÓN HORIZONTAL (Bloques de 20)
+    # 3. LÓGICA DE PAGINACIÓN HORIZONTAL (Bloques de 20)
     chunk_size = 20
-    
-    for i in range(0, len(df_filtrado), chunk_size):
-        chunk = df_filtrado.iloc[i:i+chunk_size]
+    for i in range(0, len(df_para_excel), chunk_size):
+        chunk = df_para_excel.iloc[i:i+chunk_size]
         numero_pagina = i // chunk_size
-        offset = numero_pagina * 25 # 🔥 Aquí está tu lógica de salto (25 columnas a la derecha)
+        offset = numero_pagina * 25 
         
-        # --- LLENAR CABECERAS ---
-        # Fila, Columna base + offset
-        ws.cell(row=6, column=20 + offset, value=ots)        # T6 -> AS6 ...
-        ws.cell(row=7, column=1 + offset, value=encargados)  # A7 -> Z7 ...
-        ws.cell(row=7, column=20 + offset, value=fechas)     # T7 -> AS7 ...
-        ws.cell(row=8, column=1 + offset, value=tag_linea)   # A8 -> Z8 ...
+        # --- LLENAR CABECERAS CON CONCATENACIÓN EXACTA ---
+        ws.cell(row=6, column=20 + offset, value=f"OT: {ots}")
+        ws.cell(row=7, column=1 + offset, value=f"ENCARGADO RESPONSABLE: {encargados}")
+        ws.cell(row=7, column=20 + offset, value=f"FECHA: {fechas}")
+        ws.cell(row=8, column=1 + offset, value=f"TAG DE LINEA: {tag_linea}")
         
         # --- LLENAR FILAS DE POSTES (17 al 36) ---
         fila_base = 17
         for j, (_, row) in enumerate(chunk.iterrows()):
             fila_actual = fila_base + j
             
-            # B: N° Poste y C: Tipo
+            # B17: N° Poste y C17: Tipo
             ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
             ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
             
-            # E hasta Q: Llenado dinámico de estados (A, M, B)
+            # E17 hasta Q17: Estados
             col_comp = 5 + offset
             for comp in comps_l:
                 ws.cell(row=fila_actual, column=col_comp, value=row.get(comp, ''))
                 col_comp += 1
                 
-            # R: Concatenar Observación y Actividad
+            # R17: Concatenación de OBS y ACT
             obs = str(row.get('Obs_Final', '')).strip()
             act = str(row.get('Act_Final', '')).strip()
             
             texto_r = ""
-            # Limpiamos para que no salga la palabra "nan"
-            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}\n"
-            if act and act.lower() != "nan" and act != "": texto_r += f"ACT: {act}"
+            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}"
+            if act and act.lower() != "nan" and act != "": 
+                # Si hay observación, agregamos un salto de línea antes de la actividad
+                separador = "\n" if texto_r else ""
+                texto_r += f"{separador}ACT: {act}"
             
             ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
             
-    # 5. Guardar y retornar
+    # 4. Guardar y retornar
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -682,7 +689,7 @@ if db:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary"
                 ):
-                    st.toast("Descarga iniciada...", icon="✅")
+                    st.toast("Descarga iniciada...", icon="✅") 
             
             # ==========================================
             # 📊 SECCIÓN DE ESTADÍSTICAS Y MAPA (TAB 1)
