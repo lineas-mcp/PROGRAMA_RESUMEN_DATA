@@ -5,7 +5,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import pandas as pd
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import altair as alt
 import pydeck as pdk 
@@ -91,12 +91,21 @@ def formatear_fecha_inspeccion(timestamp_ms):
     try:
         if timestamp_ms is None or pd.isna(timestamp_ms):
             return "Sin fecha"
-        # Convertimos milisegundos a segundos y formateamos
+            
+        # 1. Convertimos a segundos
         segundos = int(timestamp_ms) / 1000
-        return datetime.fromtimestamp(segundos).strftime('%d/%m/%Y %H:%M')
+        
+        # 2. Leemos la fecha en Hora Universal (UTC) para que sea exacta
+        fecha_utc = datetime.fromtimestamp(segundos, tz=timezone.utc)
+        
+        # 3. Aplicamos la zona horaria de Perú (UTC-5)
+        zona_peru = timezone(timedelta(hours=-5))
+        fecha_peru = fecha_utc.astimezone(zona_peru)
+        
+        # 4. Devolvemos el texto bonito (Día/Mes/Año Hora:Minuto:Segundo)
+        return fecha_peru.strftime('%d/%m/%Y %H:%M:%S')
     except:
-        return str(timestamp_ms)
-    
+        return str(timestamp_ms)    
 # ==========================================
 # 2. PROCESADORES TÉCNICOS
 # ==========================================
