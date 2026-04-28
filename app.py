@@ -533,8 +533,7 @@ if db:
                 out_l = BytesIO()
                 with pd.ExcelWriter(out_l, engine='openpyxl') as writer:
                     df_ex_l = df_f[["ID_Doc"] + cols_visibles].copy() 
-                    if 'Fecha' in df_ex_l.columns: 
-                        df_ex_l['Fecha'] = df_ex_l['Fecha'].dt.tz_localize(None)
+                    # ✅ Ya no quitamos la zona horaria porque "Fecha" ya es un texto limpio
                     df_ex_l.to_excel(writer, index=False, sheet_name="Lineas")
                 
                 st.download_button("📥 Descargar Excel de Líneas", out_l.getvalue(), "Reporte_Lineas.xlsx")
