@@ -211,7 +211,24 @@ if db:
     def obtener_campanas():
         docs_c = db.collection("reportes_inspeccion_lineas").select(["campana"]).stream()
         return sorted(list(set([d.to_dict().get("campana") for d in docs_c if d.to_dict().get("campana")])), reverse=True)
-    
+    # --- OBTENER DICCIONARIO DE USUARIOS (DNI -> Nombre) ---
+    @st.cache_data(ttl=86400) # Se actualiza cada hora para no gastar lecturas
+    def obtener_mapa_usuarios():
+        try:
+            docs_u = db.collection("usuarios").stream()
+            mapa = {}
+            for doc in docs_u:
+                d = doc.to_dict()
+                # El DNI suele ser el ID del documento, pero por si acaso buscamos también el campo "dni"
+                dni = str(d.get("dni", doc.id)).strip() 
+                # Buscamos "nombres", si no existe, probamos "nombre"
+                nombre = str(d.get("nombres", d.get("nombre", dni))).strip() 
+                mapa[dni] = nombre
+            return mapa
+        except Exception as e:
+            st.warning(f"No se pudieron cargar los usuarios: {e}")
+            return {}
+        
     camps_totales = obtener_campanas()
     camps_pendientes = [c for c in camps_totales if c not in st.session_state.campanas_descargadas]
 
@@ -272,7 +289,8 @@ if db:
                     data_l = []
                     comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
                     docs_l = db.collection("reportes_inspeccion_lineas").where("campana", "in", campanas_a_descargar).stream()
-                    
+                    mapa_usuarios = obtener_mapa_usuarios()
+
                     for doc in docs_l:
                         d = doc.to_dict()
                         if d.get("poste"):
@@ -282,12 +300,17 @@ if db:
                             # 2. Lo pasamos por nuestra función de zona horaria (UTC-5)
                             fecha_real = formatear_fecha_inspeccion(numero_ms)
                             
+
+                            dni_inspector = str(d.get("inspector", "")).strip()
+                            # Si el DNI está en el mapa, pone el nombre; si no, deja el DNI original (por si acaso)
+                            nombre_inspector = mapa_usuarios.get(dni_inspector, dni_inspector)
+
                             # 3. Procesamos los detalles técnicos
                             info = procesar_detalles_lineas(d.get("detalles_tecnicos", ""), comps_l)
                             row = {
                                 "ID_Doc": doc.id, 
                                 "Campaña": d.get("campana"), 
-                                "Inspector": d.get("inspector"), 
+                                "Inspector": nombre_inspector, 
                                 "Orden Trabajo": d.get("orden_trabajo", "N/A"),
                                 "Tipo Poste": d.get("tipo_poste", "N/A"),
                                 "Fecha": fecha_real, 
