@@ -11,6 +11,7 @@ import altair as alt
 import pydeck as pdk 
 from fpdf import FPDF
 import matplotlib.pyplot as plt
+from datetime import datetime
 import io
 import numpy as np
 from folium.plugins import HeatMap
@@ -86,6 +87,16 @@ def conectar_firebase():
 
 db = conectar_firebase()
 
+def formatear_fecha_inspeccion(timestamp_ms):
+    try:
+        if timestamp_ms is None or pd.isna(timestamp_ms):
+            return "Sin fecha"
+        # Convertimos milisegundos a segundos y formateamos
+        segundos = int(timestamp_ms) / 1000
+        return datetime.fromtimestamp(segundos).strftime('%d/%m/%Y %H:%M')
+    except:
+        return str(timestamp_ms)
+    
 # ==========================================
 # 2. PROCESADORES TÉCNICOS
 # ==========================================
@@ -195,6 +206,7 @@ if db:
     camps_totales = obtener_campanas()
     camps_pendientes = [c for c in camps_totales if c not in st.session_state.campanas_descargadas]
 
+    
     # --- PANEL SUPERIOR DE SINCRONIZACIÓN ---
     with st.expander("📦 Panel de Sincronización de Datos (Firebase)", expanded=True):
         st.markdown(f"**✅ Campañas en Memoria:** {', '.join(st.session_state.campanas_descargadas) if st.session_state.campanas_descargadas else '*Ninguna*'} | **🚜 Gensets Descargados:** {'Sí' if st.session_state.gensets_descargados else 'No'}")
@@ -257,13 +269,14 @@ if db:
                         if d.get("poste"):
                             dt = pd.to_datetime(d.get("fecha_inspeccion", 0), unit='ms')
                             info = procesar_detalles_lineas(d.get("detalles_tecnicos", ""), comps_l)
+                            fecha_real = formatear_fecha_inspeccion(dt)
                             row = {
                                 "ID_Doc": doc.id, 
                                 "Campaña": d.get("campana"), 
                                 "Inspector": d.get("inspector"), 
                                 "Orden Trabajo": d.get("orden_trabajo", "N/A"),
                                 "Tipo Poste": d.get("tipo_poste", "N/A"),
-                                "Fecha": dt, 
+                                "Fecha": fecha_real, 
                                 "Zona": d.get("zona", "N/A").strip(), 
                                 "Derivación": d.get("equipo", "N/A").strip(), 
                                 "Poste": d.get("poste"),
