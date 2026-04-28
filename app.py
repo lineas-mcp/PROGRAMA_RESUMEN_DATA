@@ -99,7 +99,7 @@ def formatear_fecha_inspeccion(timestamp_ms):
         fecha_utc = datetime.fromtimestamp(segundos, tz=timezone.utc)
         
         # 3. Aplicamos la zona horaria de Perú (UTC-5)
-        zona_peru = timezone(timedelta(hours=-5))
+        zona_peru = timezone(timedelta(hours=0))
         fecha_peru = fecha_utc.astimezone(zona_peru)
         
         # 4. Devolvemos el texto bonito (Día/Mes/Año Hora:Minuto:Segundo)
