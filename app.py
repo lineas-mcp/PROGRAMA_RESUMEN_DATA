@@ -15,7 +15,7 @@ from datetime import datetime
 import io
 import numpy as np
 from folium.plugins import HeatMap
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font, Alignment  # 👈 AGREGAMOS FONT Y ALIGNMENT AQUÍ
 from openpyxl import load_workbook
 from io import BytesIO
 import math
@@ -541,13 +541,21 @@ if db:
             with c2: zona_f = st.selectbox("Zona:", ["TODAS"] + sorted(df_f["Zona"].unique().tolist()))
             df_f = df_f[df_f["Zona"] == zona_f] if zona_f != "TODAS" else df_f
             
-            # 👇 NUEVO FILTRO MULTIPLE PARA DERIVACIONES 👇
+            # 👇 NUEVO SISTEMA DESPLEGABLE TIPO CHECKBOX 👇
             with c3: 
                 opciones_der = sorted(df_f["Derivación"].unique().tolist())
-                # Si está vacío, asume que quieres ver TODAS
-                der_f = st.multiselect("Derivaciones (Múltiple):", opciones_der, default=opciones_der)
-                if der_f: 
-                    df_f = df_f[df_f["Derivación"].isin(der_f)]
+                
+                # Creamos el contenedor desplegable
+                with st.expander("📝 Seleccionar Derivaciones"):
+                    der_seleccionadas = []
+                    for opc in opciones_der:
+                        # Por defecto, todos los checkboxes aparecen marcados (True)
+                        # Agregamos camp_f a la key para que se reinicie al cambiar de campaña
+                        if st.checkbox(opc, value=True, key=f"chk_{opc}_{camp_f}"):
+                            der_seleccionadas.append(opc)
+                
+                # Filtramos la tabla basándonos en los checkboxes que quedaron activos
+                df_f = df_f[df_f["Derivación"].isin(der_seleccionadas)]
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
