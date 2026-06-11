@@ -183,13 +183,31 @@ def descargar_excel_formateado(df_filtrado):
             fila_actual = fila_base + j
             
             if item['tipo'] == 'titulo':
-                # COMBINACIÓN DE CELDAS: Desde la columna A (1) hasta la X (24) sumando el offset
+                # --- 1. ROMPER COMBINACIONES PREVIAS (El truco) ---
+                celdas_a_descombinar = []
+                # Buscamos si tu plantilla tiene celdas combinadas que estorben en esta fila
+                for rango in list(ws.merged_cells.ranges):
+                    if rango.min_row <= fila_actual <= rango.max_row:
+                        if rango.min_col <= (24 + offset) and rango.max_col >= (1 + offset):
+                            celdas_a_descombinar.append(rango)
+                
+                # Descombinamos las que encontramos para limpiar el terreno
+                for rango in celdas_a_descombinar:
+                    ws.unmerge_cells(str(rango))
+                
+                # --- 2. AHORA SÍ, COMBINACIÓN TOTAL ---
                 ws.merge_cells(start_row=fila_actual, start_column=1 + offset, end_row=fila_actual, end_column=24 + offset)
                 
+                # Escribimos el título en la primera celda
                 celda_titulo = ws.cell(row=fila_actual, column=1 + offset, value=f"► DERIVACIÓN: {item['valor']}")
-                celda_titulo.fill = fill_titulo
                 celda_titulo.font = Font(color="FFFFFF", bold=True, size=11)
                 celda_titulo.alignment = Alignment(horizontal="center", vertical="center")
+                
+                # --- 3. BLINDAJE VISUAL ---
+                # Pintamos TODAS las celdas de la fila de azul oscuro para que 
+                # Excel no dibuje bordes blancos atravesando nuestro título
+                for col_azul in range(1 + offset, 25 + offset):
+                    ws.cell(row=fila_actual, column=col_azul).fill = fill_titulo
                 
             elif item['tipo'] == 'dato':
                 row = item['valor']
