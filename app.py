@@ -120,150 +120,126 @@ def descargar_excel_formateado(df_filtrado):
 
     df_para_excel = df_filtrado.copy()
     df_para_excel['orden_temp'] = df_para_excel['Poste'].apply(extraer_numero)
-    df_para_excel = df_para_excel.sort_values(by=['orden_temp', 'Poste']).reset_index(drop=True)
+    # Ordenamos primero por Derivación para agruparlos, y luego por número de poste
+    df_para_excel = df_para_excel.sort_values(by=['Derivación', 'orden_temp', 'Poste']).reset_index(drop=True)
 
     wb = load_workbook('plantilla_chinalco.xlsx')
     ws = wb.active
     
-    # 👈 NUEVO: Definimos los colores exactos (Hexadecimal sin el #)
+    # --- COLORES ---
     fill_rojo = PatternFill(start_color="CC0000", end_color="CC0000", fill_type="solid")
     fill_naranja = PatternFill(start_color="E67E22", end_color="E67E22", fill_type="solid")
     fill_verde = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
     fill_plomo = PatternFill(start_color="BDC3C7", end_color="BDC3C7", fill_type="solid")
+    fill_titulo = PatternFill(start_color="01305D", end_color="01305D", fill_type="solid") # Azul corporativo
 
-    # ... (código de cabeceras igual que antes) ...
+    # --- DATOS GENERALES DE CABECERA ---
     ots = " / ".join([str(x) for x in df_para_excel['Orden Trabajo'].unique() if x != 'N/A'])
     encargados = " / ".join([str(x) for x in df_para_excel['Inspector'].unique()])
-    tag_linea = " / ".join([str(x) for x in df_para_excel['Derivación'].unique()])
     fechas_unicas = list(set([str(x).split(' ')[0] for x in df_para_excel['Fecha']]))
     fechas = " / ".join(fechas_unicas)
-
-    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", 
-               "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", 
-               "Seccionador", "Señalética", "Otros"]
-
-    chunk_size = 20
-    for i in range(0, len(df_para_excel), chunk_size):
-        chunk = df_para_excel.iloc[i:i+chunk_size]
-        numero_pagina = i // chunk_size
-        offset = numero_pagina * 25 
-        
-        ws.cell(row=6, column=20 + offset, value=f"OT: {ots}")
-        ws.cell(row=7, column=1 + offset, value=f"ENCARGADO RESPONSABLE: {encargados}")
-        ws.cell(row=7, column=20 + offset, value=f"FECHA: {fechas}")
-        ws.cell(row=8, column=1 + offset, value=f"TAG DE LINEA: {tag_linea}")
-        
-        fila_base = 17
-        for j, (_, row) in enumerate(chunk.iterrows()):
-            fila_actual = fila_base + j
-            
-            ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
-            ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
-            
-            # --- NUEVO: LLENADO Y COLOREADO DE ESTADOS ---
-            col_comp = 5 + offset
-            for comp in comps_l:
-                valor = str(row.get(comp, '')).strip().upper()
-                celda = ws.cell(row=fila_actual, column=col_comp, value=valor)
-                
-                # Aplicamos el color según la letra
-                if valor in ["B"]:
-                    celda.fill = fill_verde
-                elif valor in ["M", "NT"]:
-                    celda.fill = fill_naranja
-                elif valor == "A":
-                    celda.fill = fill_rojo
-                elif valor in ["N/A", "NA"]:
-                    celda.fill = fill_plomo
-                    
-                col_comp += 1
-                
-            obs = str(row.get('Obs_Final', '')).strip()
-            act = str(row.get('Act_Final', '')).strip()
-            texto_r = ""
-            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}"
-            if act and act.lower() != "nan" and act != "": 
-                separador = "\n" if texto_r else ""
-                texto_r += f"{separador}ACT: {act}"
-            
-            ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
-            
-    out = BytesIO()
-    wb.save(out)
-    return out.getvalue()
-
-    # --- ORDENAMIENTO NATURAL PARA EVITAR P1, P10, P11 ---
-    # Creamos una columna temporal para ordenar numéricamente
-    def extraer_numero(texto):
-        numeros = re.findall(r'\d+', str(texto))
-        return int(numeros[0]) if numeros else 0
-
-    # Ordenamos el dataframe tal como lo quieres ver
-    df_para_excel = df_filtrado.copy()
-    df_para_excel['orden_temp'] = df_para_excel['Poste'].apply(extraer_numero)
-    df_para_excel = df_para_excel.sort_values(by=['orden_temp', 'Poste']).reset_index(drop=True)
-
-    # 1. Cargamos la plantilla
-    wb = load_workbook('plantilla_chinalco.xlsx')
-    ws = wb.active
     
-    # 2. Preparamos los datos consolidados
-    ots = " / ".join([str(x) for x in df_para_excel['Orden Trabajo'].unique() if x != 'N/A'])
-    encargados = " / ".join([str(x) for x in df_para_excel['Inspector'].unique()])
-    tag_linea = " / ".join([str(x) for x in df_para_excel['Derivación'].unique()])
-    fechas_unicas = list(set([str(x).split(' ')[0] for x in df_para_excel['Fecha']]))
-    fechas = " / ".join(fechas_unicas)
+    # Si hay muchas derivaciones, mostramos un resumen en la cabecera principal
+    derivaciones_unicas = df_para_excel['Derivación'].unique()
+    tag_linea = " / ".join([str(x) for x in derivaciones_unicas]) if len(derivaciones_unicas) <= 2 else "MÚLTIPLES DERIVACIONES (Ver detalle abajo)"
 
-    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", 
-               "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", 
-               "Seccionador", "Señalética", "Otros"]
+    comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador", "Señalética", "Otros"]
 
-    # 3. LÓGICA DE PAGINACIÓN HORIZONTAL (Bloques de 20)
-    chunk_size = 20
-    for i in range(0, len(df_para_excel), chunk_size):
-        chunk = df_para_excel.iloc[i:i+chunk_size]
-        numero_pagina = i // chunk_size
-        offset = numero_pagina * 25 
+    # =================================================================
+    # 🔥 LÓGICA DE ITEMS DINÁMICOS (TÍTULOS Y POSTES MEZCLADOS)
+    # =================================================================
+    items_totales = []
+    
+    # Agrupamos los datos. Por cada derivación, creamos un item "titulo" y luego sus postes
+    for derivacion, df_grupo in df_para_excel.groupby('Derivación', sort=False):
+        items_totales.append({'tipo': 'titulo', 'valor': derivacion})
+        for _, row in df_grupo.iterrows():
+            items_totales.append({'tipo': 'dato', 'valor': row})
+
+    # Ahora paginamos esos items en bloques estrictos de 20 filas (para no romper la plantilla)
+    paginas = []
+    pagina_actual = []
+    
+    for item in items_totales:
+        if len(pagina_actual) == 20: # Se llenó la página
+            paginas.append(pagina_actual)
+            pagina_actual = []
+            # Si cortamos a la mitad de una derivación, repetimos el título en la hoja nueva
+            if item['tipo'] == 'dato':
+                deriv_actual = item['valor']['Derivación']
+                pagina_actual.append({'tipo': 'titulo', 'valor': f"{deriv_actual} (Continuación)"})
+
+        # Evitar "títulos viudos": Si toca escribir un título pero es la fila 20 (la última),
+        # lo empujamos a la siguiente página para que no quede solo sin postes abajo.
+        if item['tipo'] == 'titulo' and len(pagina_actual) == 19:
+            paginas.append(pagina_actual)
+            pagina_actual = [item]
+        else:
+            pagina_actual.append(item)
+
+    # Añadimos la última página si quedó a medias
+    if pagina_actual:
+        paginas.append(pagina_actual)
+
+    # =================================================================
+    # 🔥 ESCRITURA FINAL EN EXCEL (CON SALTOS DE PÁGINA)
+    # =================================================================
+    for i, pagina in enumerate(paginas):
+        offset = i * 25 # El salto horizontal mágico
         
-        # --- LLENAR CABECERAS CON CONCATENACIÓN EXACTA ---
+        # 1. Cabeceras Fijas (T6, A7, T7, A8)
         ws.cell(row=6, column=20 + offset, value=f"OT: {ots}")
         ws.cell(row=7, column=1 + offset, value=f"ENCARGADO RESPONSABLE: {encargados}")
         ws.cell(row=7, column=20 + offset, value=f"FECHA: {fechas}")
         ws.cell(row=8, column=1 + offset, value=f"TAG DE LINEA: {tag_linea}")
         
-        # --- LLENAR FILAS DE POSTES (17 al 36) ---
+        # 2. Las 20 filas de la cuadrícula (iniciando en la 17)
         fila_base = 17
-        for j, (_, row) in enumerate(chunk.iterrows()):
+        for j, item in enumerate(pagina):
             fila_actual = fila_base + j
             
-            # B17: N° Poste y C17: Tipo
-            ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
-            ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
-            
-            # E17 hasta Q17: Estados
-            col_comp = 5 + offset
-            for comp in comps_l:
-                ws.cell(row=fila_actual, column=col_comp, value=row.get(comp, ''))
-                col_comp += 1
+            if item['tipo'] == 'titulo':
+                # COMBINACIÓN DE CELDAS: Desde la columna A (1) hasta la X (24) sumando el offset
+                ws.merge_cells(start_row=fila_actual, start_column=1 + offset, end_row=fila_actual, end_column=24 + offset)
                 
-            # R17: Concatenación de OBS y ACT
-            obs = str(row.get('Obs_Final', '')).strip()
-            act = str(row.get('Act_Final', '')).strip()
-            
-            texto_r = ""
-            if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}"
-            if act and act.lower() != "nan" and act != "": 
-                # Si hay observación, agregamos un salto de línea antes de la actividad
-                separador = "\n" if texto_r else ""
-                texto_r += f"{separador}ACT: {act}"
-            
-            ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
-            
-    # 4. Guardar y retornar
+                celda_titulo = ws.cell(row=fila_actual, column=1 + offset, value=f"► DERIVACIÓN: {item['valor']}")
+                celda_titulo.fill = fill_titulo
+                celda_titulo.font = Font(color="FFFFFF", bold=True, size=11)
+                celda_titulo.alignment = Alignment(horizontal="center", vertical="center")
+                
+            elif item['tipo'] == 'dato':
+                row = item['valor']
+                # N° Poste y Tipo
+                ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
+                ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
+                
+                # Colores de estados
+                col_comp = 5 + offset
+                for comp in comps_l:
+                    valor = str(row.get(comp, '')).strip().upper()
+                    celda = ws.cell(row=fila_actual, column=col_comp, value=valor)
+                    
+                    if valor in ["B"]: celda.fill = fill_verde
+                    elif valor in ["M", "NT"]: celda.fill = fill_naranja
+                    elif valor == "A": celda.fill = fill_rojo
+                    elif valor in ["N/A", "NA"]: celda.fill = fill_plomo
+                        
+                    col_comp += 1
+                    
+                # Observaciones y Actividades
+                obs = str(row.get('Obs_Final', '')).strip()
+                act = str(row.get('Act_Final', '')).strip()
+                texto_r = ""
+                if obs and obs.lower() != "nan" and obs != "": texto_r += f"OBS: {obs}"
+                if act and act.lower() != "nan" and act != "": 
+                    separador = "\n" if texto_r else ""
+                    texto_r += f"{separador}ACT: {act}"
+                
+                ws.cell(row=fila_actual, column=18 + offset, value=texto_r.strip())
+                
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
-
 # ==========================================
 # 2. PROCESADORES TÉCNICOS
 # ==========================================
@@ -565,8 +541,13 @@ if db:
             with c2: zona_f = st.selectbox("Zona:", ["TODAS"] + sorted(df_f["Zona"].unique().tolist()))
             df_f = df_f[df_f["Zona"] == zona_f] if zona_f != "TODAS" else df_f
             
-            with c3: der_f = st.selectbox("Derivación:", ["TODAS"] + sorted(df_f["Derivación"].unique().tolist()))
-            df_f = df_f[df_f["Derivación"] == der_f] if der_f != "TODAS" else df_f
+            # 👇 NUEVO FILTRO MULTIPLE PARA DERIVACIONES 👇
+            with c3: 
+                opciones_der = sorted(df_f["Derivación"].unique().tolist())
+                # Si está vacío, asume que quieres ver TODAS
+                der_f = st.multiselect("Derivaciones (Múltiple):", opciones_der, default=opciones_der)
+                if der_f: 
+                    df_f = df_f[df_f["Derivación"].isin(der_f)]
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
             
@@ -1311,6 +1292,7 @@ if db:
                     )
                     capas_activas.append(linea_horometro + puntos)
                 
+
                 fluidos_seleccionados = []
                 if ver_combustible: fluidos_seleccionados.append('Nivel Combustible')
                 if ver_aceite: fluidos_seleccionados.append('Nivel Aceite')
@@ -1349,7 +1331,7 @@ if db:
                 
                 meta_cols = ["Tipo", "Equipo", "Fecha", "Horómetro", "Inspector", "Zona", "Estado_Op", "Nivel Combustible", "Nivel Aceite", "Nivel Refrigerante"]
                 tech_cols = [c for c in df_h.columns if c not in meta_cols]
-                
+                    
                 if tech_cols:
                     df_tech = df_h[["Fecha"] + tech_cols].copy()
                     df_tech["Fecha_Str"] = df_tech["Fecha"].dt.strftime('%d/%m %H:%M:%S')
