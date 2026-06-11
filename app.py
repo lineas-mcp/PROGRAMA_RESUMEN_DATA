@@ -113,7 +113,7 @@ def formatear_fecha_inspeccion(timestamp_ms):
     
 
 def descargar_excel_formateado(df_filtrado):
-    # --- ORDENAMIENTO NATURAL ---
+    
     def extraer_numero(texto):
         numeros = re.findall(r'\d+', str(texto))
         return int(numeros[0]) if numeros else 0
@@ -131,69 +131,53 @@ def descargar_excel_formateado(df_filtrado):
     fill_naranja = PatternFill(start_color="E67E22", end_color="E67E22", fill_type="solid")
     fill_verde = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
     fill_plomo = PatternFill(start_color="BDC3C7", end_color="BDC3C7", fill_type="solid")
-    fill_titulo = PatternFill(start_color="01305D", end_color="01305D", fill_type="solid") # Azul corporativo
+    fill_titulo = PatternFill(start_color="01305D", end_color="01305D", fill_type="solid") 
 
-    # --- DATOS GENERALES DE CABECERA ---
     ots = " / ".join([str(x) for x in df_para_excel['Orden Trabajo'].unique() if x != 'N/A'])
     encargados = " / ".join([str(x) for x in df_para_excel['Inspector'].unique()])
     fechas_unicas = list(set([str(x).split(' ')[0] for x in df_para_excel['Fecha']]))
     fechas = " / ".join(fechas_unicas)
     
-    # Si hay muchas derivaciones, mostramos un resumen en la cabecera principal
     derivaciones_unicas = df_para_excel['Derivación'].unique()
     tag_linea = " / ".join([str(x) for x in derivaciones_unicas]) if len(derivaciones_unicas) <= 2 else "MÚLTIPLES DERIVACIONES (Ver detalle abajo)"
 
     comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador", "Señalética", "Otros"]
 
-    # =================================================================
-    # 🔥 LÓGICA DE ITEMS DINÁMICOS (TÍTULOS Y POSTES MEZCLADOS)
-    # =================================================================
+
     items_totales = []
     
-    # Agrupamos los datos. Por cada derivación, creamos un item "titulo" y luego sus postes
     for derivacion, df_grupo in df_para_excel.groupby('Derivación', sort=False):
         items_totales.append({'tipo': 'titulo', 'valor': derivacion})
         for _, row in df_grupo.iterrows():
             items_totales.append({'tipo': 'dato', 'valor': row})
 
-    # Ahora paginamos esos items en bloques estrictos de 20 filas (para no romper la plantilla)
     paginas = []
     pagina_actual = []
     
     for item in items_totales:
-        if len(pagina_actual) == 20: # Se llenó la página
+        if len(pagina_actual) == 20:
             paginas.append(pagina_actual)
             pagina_actual = []
-            # Si cortamos a la mitad de una derivación, repetimos el título en la hoja nueva
             if item['tipo'] == 'dato':
                 deriv_actual = item['valor']['Derivación']
-                pagina_actual.append({'tipo': 'titulo', 'valor': f"{deriv_actual} (Continuación)"})
+                pagina_actual.append({'tipo': 'titulo', 'valor': f"{deriv_actual}"})
 
-        # Evitar "títulos viudos": Si toca escribir un título pero es la fila 20 (la última),
-        # lo empujamos a la siguiente página para que no quede solo sin postes abajo.
         if item['tipo'] == 'titulo' and len(pagina_actual) == 19:
             paginas.append(pagina_actual)
             pagina_actual = [item]
         else:
             pagina_actual.append(item)
 
-    # Añadimos la última página si quedó a medias
     if pagina_actual:
         paginas.append(pagina_actual)
 
-    # =================================================================
-    # 🔥 ESCRITURA FINAL EN EXCEL (CON SALTOS DE PÁGINA)
-    # =================================================================
     for i, pagina in enumerate(paginas):
-        offset = i * 25 # El salto horizontal mágico
-        
-        # 1. Cabeceras Fijas (T6, A7, T7, A8)
+        offset = i * 25 
         ws.cell(row=6, column=20 + offset, value=f"OT: {ots}")
         ws.cell(row=7, column=1 + offset, value=f"ENCARGADO RESPONSABLE: {encargados}")
         ws.cell(row=7, column=20 + offset, value=f"FECHA: {fechas}")
         ws.cell(row=8, column=1 + offset, value=f"TAG DE LINEA: {tag_linea}")
         
-        # 2. Las 20 filas de la cuadrícula (iniciando en la 17)
         fila_base = 17
         for j, item in enumerate(pagina):
             fila_actual = fila_base + j
