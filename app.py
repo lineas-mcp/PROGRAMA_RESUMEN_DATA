@@ -65,15 +65,11 @@ def conectar_firebase():
             if "firebase" in st.secrets:
                 creds = dict(st.secrets["firebase"])
                 
-                # REPARACIÓN MANUAL DE LA LLAVE PEM
                 key = creds["private_key"]
                 if "-----BEGIN PRIVATE KEY-----" in key and "\\n" not in key:
-                    # Extraemos el contenido base64 quitando los encabezados
                     header = "-----BEGIN PRIVATE KEY-----"
                     footer = "-----END PRIVATE KEY-----"
                     content = key.replace(header, "").replace(footer, "").replace(" ", "").strip()
-                    
-                    # Reconstruimos el formato PEM oficial: Cabecera + contenido cada 64 chars + Pie
                     lines = [content[i:i+64] for i in range(0, len(content), 64)]
                     key_rebuilt = header + "\n" + "\n".join(lines) + "\n" + footer + "\n"
                     creds["private_key"] = key_rebuilt
@@ -95,18 +91,13 @@ def formatear_fecha_inspeccion(timestamp_ms):
     try:
         if timestamp_ms is None or pd.isna(timestamp_ms):
             return "Sin fecha"
-            
-        # 1. Convertimos a segundos
-        segundos = int(timestamp_ms) / 1000
         
-        # 2. Leemos la fecha en Hora Universal (UTC) para que sea exacta
+        segundos = int(timestamp_ms) / 1000
         fecha_utc = datetime.fromtimestamp(segundos, tz=timezone.utc)
         
-        # 3. Aplicamos la zona horaria de Perú (UTC-5)
         zona_peru = timezone(timedelta(hours=-5))
         fecha_peru = fecha_utc.astimezone(zona_peru)
         
-        # 4. Devolvemos el texto bonito (Día/Mes/Año Hora:Minuto:Segundo)
         return fecha_peru.strftime('%d/%m/%Y %H:%M:%S')
     except:
         return str(timestamp_ms)    
@@ -120,13 +111,11 @@ def descargar_excel_formateado(df_filtrado):
 
     df_para_excel = df_filtrado.copy()
     df_para_excel['orden_temp'] = df_para_excel['Poste'].apply(extraer_numero)
-    # Ordenamos primero por Derivación para agruparlos, y luego por número de poste
     df_para_excel = df_para_excel.sort_values(by=['Derivación', 'orden_temp', 'Poste']).reset_index(drop=True)
 
     wb = load_workbook('plantilla_chinalco.xlsx')
     ws = wb.active
     
-    # --- COLORES ---
     fill_rojo = PatternFill(start_color="CC0000", end_color="CC0000", fill_type="solid")
     fill_naranja = PatternFill(start_color="E67E22", end_color="E67E22", fill_type="solid")
     fill_verde = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
@@ -183,39 +172,29 @@ def descargar_excel_formateado(df_filtrado):
             fila_actual = fila_base + j
             
             if item['tipo'] == 'titulo':
-                # --- 1. ROMPER COMBINACIONES PREVIAS (El truco) ---
                 celdas_a_descombinar = []
-                # Buscamos si tu plantilla tiene celdas combinadas que estorben en esta fila
                 for rango in list(ws.merged_cells.ranges):
                     if rango.min_row <= fila_actual <= rango.max_row:
                         if rango.min_col <= (24 + offset) and rango.max_col >= (1 + offset):
                             celdas_a_descombinar.append(rango)
                 
-                # Descombinamos las que encontramos para limpiar el terreno
                 for rango in celdas_a_descombinar:
                     ws.unmerge_cells(str(rango))
                 
-                # --- 2. AHORA SÍ, COMBINACIÓN TOTAL ---
                 ws.merge_cells(start_row=fila_actual, start_column=1 + offset, end_row=fila_actual, end_column=24 + offset)
                 
-                # Escribimos el título en la primera celda
                 celda_titulo = ws.cell(row=fila_actual, column=1 + offset, value=f"► DERIVACIÓN: {item['valor']}")
                 celda_titulo.font = Font(color="FFFFFF", bold=True, size=11)
                 celda_titulo.alignment = Alignment(horizontal="center", vertical="center")
                 
-                # --- 3. BLINDAJE VISUAL ---
-                # Pintamos TODAS las celdas de la fila de azul oscuro para que 
-                # Excel no dibuje bordes blancos atravesando nuestro título
                 for col_azul in range(1 + offset, 25 + offset):
                     ws.cell(row=fila_actual, column=col_azul).fill = fill_titulo
                 
             elif item['tipo'] == 'dato':
                 row = item['valor']
-                # N° Poste y Tipo
                 ws.cell(row=fila_actual, column=2 + offset, value=row.get('Poste', ''))
                 ws.cell(row=fila_actual, column=3 + offset, value=row.get('Tipo Poste', ''))
                 
-                # Colores de estados
                 col_comp = 5 + offset
                 for comp in comps_l:
                     valor = str(row.get(comp, '')).strip().upper()
@@ -228,7 +207,6 @@ def descargar_excel_formateado(df_filtrado):
                         
                     col_comp += 1
                     
-                # Observaciones y Actividades
                 obs = str(row.get('Obs_Final', '')).strip()
                 act = str(row.get('Act_Final', '')).strip()
                 texto_r = ""
@@ -242,14 +220,12 @@ def descargar_excel_formateado(df_filtrado):
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
-# ==========================================
-# 2. PROCESADORES TÉCNICOS
-# ==========================================
+
 def procesar_detalles_lineas(texto, lista_comps):
     res = {c: "N/A" for c in lista_comps}
     obs_dict = {f"obs_{c}": "" for c in lista_comps}
     act_dict = {f"act_{c}": "" for c in lista_comps}
-    foto_dict = {f"foto_{c}": "NO FOTO" for c in lista_comps} # 👈 1. Nuevo diccionario para guardar las fotos
+    foto_dict = {f"foto_{c}": "NO FOTO" for c in lista_comps} 
     
     if not texto: 
         return res | obs_dict | act_dict | foto_dict | {"Obs_Final": "", "Act_Final": ""}
@@ -266,22 +242,19 @@ def procesar_detalles_lineas(texto, lista_comps):
         if len(p) >= 2:
             c_nom = p[0].strip()
             if c_nom in res:
-                # 1. Estado (A, M, B...)
+
                 res[c_nom] = conv.get(p[1].strip().upper(), p[1].strip().upper())
-                
-                # 👈 2. Buscar dinámicamente si hay una FOTO en cualquiera de las partes de la cadena
+
                 for part in p:
                     if part.strip().startswith("FOTO:"):
                         foto_dict[f"foto_{c_nom}"] = part.replace("FOTO:", "").strip()
                 
-                # 3. Extraer Observación (p[2])
                 if len(p) >= 3:
                     obs_val = p[2].strip()
                     if obs_val.upper() not in omitir and not obs_val.startswith("FOTO:"):
                         obs_dict[f"obs_{c_nom}"] = obs_val
                         resumen_obs.append(f"• {c_nom}: {obs_val}")
                 
-                # 4. Extraer Actividad (p[3])
                 if len(p) >= 4:
                     act_val = p[3].replace("ACT:", "").strip()
                     if act_val.upper() not in omitir and not act_val.startswith("FOTO:"):
@@ -291,7 +264,6 @@ def procesar_detalles_lineas(texto, lista_comps):
     res["Obs_Final"] = "\n".join(resumen_obs)
     res["Act_Final"] = "\n".join(resumen_act)
     
-    # Retornamos también el diccionario de fotos
     return res | obs_dict | act_dict | foto_dict
 
 def color_estado(val):
@@ -300,17 +272,15 @@ def color_estado(val):
         
     v = str(val).strip().upper()
     
-    # --- LÓGICA DE COLORES PARA LÍNEAS (Incluyendo la N) ---
     if v == "A": 
         return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
     if v == "M" or v == "NT": 
         return 'background-color: #FFF4E5; color: #E67E22; font-weight: bold; text-align: center;'
-    if v == "B": # 👈 Aquí agregamos la N para que se pinte como "Bueno/Normal"
+    if v == "B": 
         return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
     if v == "N/A": 
         return 'color: #BDC3C7; text-align: center;'
     
-    # --- LÓGICA PARA GENSETS ---
     if v in ["CAMBIAR", "INOPERATIVO", "VACÍO", "1/4", "SUCIO"]: 
         return 'background-color: #FFDADA; color: #CC0000; font-weight: bold; text-align: center;'
     if v in ["NO TIENE", "1/2", "STAND BY"]: 
@@ -330,13 +300,10 @@ ORDEN_EXACTO_GENSET = [
     "Recomendación de Cambio", "Comentarios"
 ]
 
-# ==========================================
-# 3. INTERFAZ Y DESCARGA
-# ==========================================
 st.image("logo_chinalco.png", width=250)
 
 if db:
-    # --- INICIALIZACIÓN DE LA MEMORIA ---
+
     if "df_master" not in st.session_state: st.session_state.df_master = pd.DataFrame()
     if "df_genset" not in st.session_state: st.session_state.df_genset = pd.DataFrame()
     if "campanas_descargadas" not in st.session_state: st.session_state.campanas_descargadas = []
@@ -354,9 +321,7 @@ if db:
             mapa = {}
             for doc in docs_u:
                 d = doc.to_dict()
-                # El DNI suele ser el ID del documento, pero por si acaso buscamos también el campo "dni"
-                dni = str(d.get("dni", doc.id)).strip() 
-                # Buscamos "nombres", si no existe, probamos "nombre"
+                dni = str(d.get("dni", doc.id)).strip()
                 nombre = str(d.get("nombres", d.get("nombre", dni))).strip() 
                 mapa[dni] = nombre
             return mapa
@@ -367,15 +332,11 @@ if db:
     camps_totales = obtener_campanas()
     camps_pendientes = [c for c in camps_totales if c not in st.session_state.campanas_descargadas]
 
-    
-    # --- PANEL SUPERIOR DE SINCRONIZACIÓN ---
     with st.expander("📦 Panel de Sincronización de Datos (Firebase)", expanded=True):
         st.markdown(f"**✅ Campañas en Memoria:** {', '.join(st.session_state.campanas_descargadas) if st.session_state.campanas_descargadas else '*Ninguna*'} | **🚜 Gensets Descargados:** {'Sí' if st.session_state.gensets_descargados else 'No'}")
         
         c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
         
-        # OJO: Ahora mostramos TODAS las campañas en el selector, no solo las pendientes
-        # Esto permite seleccionar una que ya está en memoria para "Actualizarla"
         with c1:
             seleccionados = st.multiselect("Selecciona campañas para descargar o actualizar:", camps_totales)
         
@@ -384,7 +345,6 @@ if db:
 
         with c2:
             if st.button("📥 Descargar Nuevas", use_container_width=True):
-                # Filtramos para descargar solo lo que no está en memoria
                 nuevas_sel = [c for c in seleccionados if c not in st.session_state.campanas_descargadas]
                 if nuevas_sel or not st.session_state.gensets_descargados:
                     ejecutar_descarga = True
@@ -398,11 +358,10 @@ if db:
                 st.rerun()
                 
         with c4:
-            # Reemplazamos "Descargar Faltantes" por "Actualizar Selección"
             if st.button("⚡ Actualizar Selección", use_container_width=True, type="primary"):
                 if seleccionados:
                     ejecutar_descarga = True
-                    campanas_a_descargar = seleccionados # Descargará todo lo seleccionado, esté o no en memoria
+                    campanas_a_descargar = seleccionados 
                 else:
                     st.info("Selecciona al menos una campaña en la lista para actualizarla.")
 
@@ -413,13 +372,9 @@ if db:
             st.session_state.gensets_descargados = False
             st.rerun()
 
-        # ==========================================
-        # LÓGICA DE DESCARGA UNIFICADA
-        # ==========================================
         if ejecutar_descarga:
             with st.spinner("Sincronizando con Firebase..."):
                 
-                # 1. ACUMULAR O ACTUALIZAR LÍNEAS
                 if campanas_a_descargar:
                     data_l = []
                     comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
@@ -429,18 +384,14 @@ if db:
                     for doc in docs_l:
                         d = doc.to_dict()
                         if d.get("poste"):
-                            # 1. Sacamos el número puro de Firebase
                             numero_ms = d.get("fecha_inspeccion", 0)
                             
-                            # 2. Lo pasamos por nuestra función de zona horaria (UTC-5)
                             fecha_real = formatear_fecha_inspeccion(numero_ms)
                             
 
                             dni_inspector = str(d.get("inspector", "")).strip()
-                            # Si el DNI está en el mapa, pone el nombre; si no, deja el DNI original (por si acaso)
                             nombre_inspector = mapa_usuarios.get(dni_inspector, dni_inspector)
 
-                            # 3. Procesamos los detalles técnicos
                             info = procesar_detalles_lineas(d.get("detalles_tecnicos", ""), comps_l)
                             row = {
                                 "ID_Doc": doc.id, 
@@ -464,19 +415,11 @@ if db:
                         if st.session_state.df_master.empty:
                             st.session_state.df_master = nuevo_df_l
                         else:
-                            # Concatenamos la data vieja con la nueva
                             st.session_state.df_master = pd.concat([st.session_state.df_master, nuevo_df_l], ignore_index=True)
-                            
-                            # 🔥 EL FILTRO ANTI-DUPLICADOS:
-                            # Si un ID_Doc se repite, Pandas elimina el viejo y se queda con el 'last' (el que acabamos de descargar)
                             st.session_state.df_master = st.session_state.df_master.drop_duplicates(subset=["ID_Doc"], keep="last").reset_index(drop=True)
-                    
-                    # Actualizamos la lista de memoria sin duplicar nombres
                     for c in campanas_a_descargar:
                         if c not in st.session_state.campanas_descargadas:
                             st.session_state.campanas_descargadas.append(c)
-
-                # 2. DESCARGAR GENSETS (Solo si no se han descargado antes)
                 if not st.session_state.gensets_descargados:
                     docs_g = db.collection("historial_inspecciones").stream()
                     data_g = []
@@ -543,20 +486,15 @@ if db:
             with c2: zona_f = st.selectbox("Zona:", ["TODAS"] + sorted(df_f["Zona"].unique().tolist()))
             df_f = df_f[df_f["Zona"] == zona_f] if zona_f != "TODAS" else df_f
             
-            # 👇 NUEVO SISTEMA DESPLEGABLE TIPO CHECKBOX 👇
             with c3: 
                 opciones_der = sorted(df_f["Derivación"].unique().tolist())
                 
-                # Creamos el contenedor desplegable
                 with st.expander("📝 Seleccionar Derivaciones"):
                     der_seleccionadas = []
                     for opc in opciones_der:
-                        # Por defecto, todos los checkboxes aparecen marcados (True)
-                        # Agregamos camp_f a la key para que se reinicie al cambiar de campaña
                         if st.checkbox(opc, value=True, key=f"chk_{opc}_{camp_f}"):
                             der_seleccionadas.append(opc)
                 
-                # Filtramos la tabla basándonos en los checkboxes que quedaron activos
                 df_f = df_f[df_f["Derivación"].isin(der_seleccionadas)]
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
@@ -568,11 +506,11 @@ if db:
             editor_key = f"ed_lin_{camp_f}"
             df_con_estilo = df_f[["ID_Doc"] + cols_visibles].style.map(color_estado, subset=comps_l)
             
-            # --- NUEVA LEYENDA Y BOTÓN DE EDICIÓN ---
-            col_leyenda, col_vacio, col_toggle = st.columns([3, 1, 3]) # Distribuimos el ancho
+            
+            col_leyenda, col_vacio, col_toggle = st.columns([3, 1, 3])
             
             with col_leyenda:
-                # Recreamos la tabla de criticidad exacta con HTML
+              
                 st.markdown("""
                 <style>
                 .tabla-leyenda { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; margin-bottom: 10px;}
@@ -604,7 +542,7 @@ if db:
                 """, unsafe_allow_html=True)
                 
             with col_toggle:
-                st.write("") # Un pequeño espacio invisible para que el switch baje un poco y se alinee
+                st.write("")
                 st.write("")
                 modo_edicion = st.toggle("📝 Activar modo edición", help="Oculta los colores para permitir modificar los datos")
             
@@ -641,13 +579,13 @@ if db:
                 elif clave != "":
                     st.error("❌ Clave incorrecta. Acceso denegado.")
             else:
-                # Modo solo lectura con los colores y columnas resumidas
+                
                 df_display_view = df_f[["ID_Doc"] + cols_visibles]
                 df_con_estilo = df_display_view.style.map(color_estado, subset=comps_l)
                 st.dataframe(df_con_estilo, use_container_width=True, hide_index=True)
 
             cambios = {}
-            # Solo procesamos cambios si el modo edición está activo y la clave es correcta
+            
             if modo_edicion and st.session_state.get(editor_key):
                 cambios = st.session_state[editor_key].get("edited_rows", {})
 
@@ -680,11 +618,9 @@ if db:
                                 if "Derivación" in f_mods: update_dict["equipo"] = f_mods["Derivación"]
                                 if "Poste" in f_mods: update_dict["poste"] = f_mods["Poste"]
                                 
-                                # --- INICIO DE LA RECONSTRUCCIÓN ---
                                 texto_obs_final = f_orig.get("Obs_Final", "")
                                 texto_act_final = f_orig.get("Act_Final", "")
 
-                                # Si se modificó el estado, la observación o la actividad de algún componente
                                 if any(c.replace("obs_", "").replace("act_", "") in comps_l for c in f_mods):
                                     f_nueva = f_orig.copy()
                                     for c, v in f_mods.items(): f_nueva[c] = v
@@ -710,12 +646,10 @@ if db:
                                             
                                             act = str(f_nueva.get(f"act_{cp}", "Ninguna")).strip()
                                             if not act or act.lower() in ["nan", "none"]: act = "Ninguna"
-                                            
-                                        # 1. Armamos el bloque para Firebase
+
                                         bloque_formateado = f"[{cp} | {est} | {obs} | ACT: {act} | FOTO: {foto_str}]"
                                         detalles_lista.append(bloque_formateado)
                                         
-                                        # 2. Armamos las viñetas para la tabla visual
                                         if obs.upper() not in omitir:
                                             resumen_obs_nuevo.append(f"• {cp}: {obs}")
                                         if act.upper() not in omitir:
@@ -726,17 +660,13 @@ if db:
                                     texto_act_final = "\n".join(resumen_act_nuevo)
 
                                 try:
-                                    # Subir a Firebase
                                     db.collection("reportes_inspeccion_lineas").document(id_f).update(update_dict)
                                     
-                                    # ACTUALIZAR MEMORIA LOCAL AL INSTANTE
                                     idx_master = st.session_state.df_master[st.session_state.df_master["ID_Doc"] == id_f].index
                                     
-                                    # a) Actualizamos las celdas individuales editadas
                                     for col_m, val_m in f_mods.items():
                                         st.session_state.df_master.loc[idx_master, col_m] = val_m
                                         
-                                    # b) Actualizamos los resúmenes para que se vean al apagar el switch
                                     if any(c.replace("obs_", "").replace("act_", "") in comps_l for c in f_mods):
                                         st.session_state.df_master.loc[idx_master, "Obs_Final"] = texto_obs_final
                                         st.session_state.df_master.loc[idx_master, "Act_Final"] = texto_act_final
@@ -759,7 +689,7 @@ if db:
                 col_btn1, col_btn2 = st.columns(2)
                 
                 # ==========================================
-                # BOTÓN 1: EXCEL EN BRUTO (DATA PURA)
+                # BOTÓN 1: EXCEL SOLO DATA
                 # ==========================================
                 with col_btn1:
                     out_raw = BytesIO()
@@ -776,7 +706,7 @@ if db:
                     )
 
                 # ==========================================
-                # BOTÓN 2: EXCEL FORMATEADO (CHINALCO)
+                # BOTÓN 2: EXCEL FORMATO (CHINALCO)
                 # ==========================================
                 with col_btn2:
                     st.download_button(
@@ -807,18 +737,15 @@ if db:
                 st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 
                 if not df_f.empty:
-                    # 1. PREPARACIÓN DE DATOS MAESTROS
                     df_graf = df_f[["Poste", "Inspector"] + comps_l].copy()
                     df_melt = df_graf.melt(id_vars=["Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
                     df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])]
 
-                    # Cálculos rápidos
                     total_postes = len(df_graf)
                     postes_criticos = df_graf[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
                     fallas_a = len(df_melt[df_melt["Estado"] == 'A'])
                     fallas_m = len(df_melt[df_melt["Estado"] == 'M'])
 
-                    # --- MARCO 1: KPIs ---
                     with st.container(border=True):
                         st.markdown("### 🎯 Indicadores Clave de Riesgo")
                         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -827,9 +754,8 @@ if db:
                         kpi3.metric("🔴 Fallas Críticas", fallas_a)
                         kpi4.metric("🟠 Fallas Medias", fallas_m)
                     
-                    st.write("") # Pequeño espacio
+                    st.write("") 
 
-                    # --- FILA DE GRÁFICOS 1 ---
                     col_dona, col_insp = st.columns(2)
                     
                     with col_dona:
@@ -885,17 +811,63 @@ if db:
                                 st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
 
                     with col_g2:
-                        # MARCO 5: Desglose por Componente
+                        # MARCO 5: Desglose por Componente (AHORA INTERACTIVO)
                         with st.container(border=True):
-                            st.markdown("**📊 Desglose de Estado por Componente**")
+                            st.markdown("**📊 Desglose de Componentes (CLIC PARA FILTRAR) 👆**")
                             if not df_melt.empty:
+                                # 1. Creamos el "escuchador" de clics
+                                click_grafico = alt.selection_point(fields=['Componente', 'Estado'])
+
                                 stacked_bar = alt.Chart(df_melt).mark_bar().encode(
                                     x=alt.X('count():Q', title='Cantidad de Obs.'),
                                     y=alt.Y('Componente:N', sort='-x', title=''),
                                     color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
+                                    # 2. Hacemos que lo seleccionado brille y lo demás se opaque (Efecto Power BI)
+                                    opacity=alt.condition(click_grafico, alt.value(1.0), alt.value(0.3)),
                                     tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
-                                ).interactive()
-                                st.altair_chart(stacked_bar, use_container_width=True)
+                                ).add_params(
+                                    click_grafico # 3. Añadimos el escuchador al gráfico
+                                )
+
+                                # 4. Mostramos el gráfico y GUARDAMOS el clic en una variable usando on_select
+                                evento_clic = st.altair_chart(stacked_bar, use_container_width=True, on_select="rerun")
+
+                # ==========================================
+                # NUEVA TABLA DINÁMICA (TIPO POWER BI)
+                # ==========================================
+                st.divider()
+                st.subheader("📋 Detalle de Inspecciones (Filtrado Inteligente)")
+
+                # Lógica para filtrar la tabla según el clic
+                df_tabla_filtrada = df_f.copy()
+                filtro_activo = False
+
+                # Verificamos si el usuario hizo clic en el gráfico
+                if evento_clic and evento_clic.selection:
+                    for key, seleccion in evento_clic.selection.items():
+                        if len(seleccion) > 0:
+                            filtro_activo = True
+                            item_seleccionado = seleccion[0]
+                            
+                            # Extraemos qué Componente y Estado seleccionó
+                            comp_sel = item_seleccionado.get('Componente')
+                            est_sel = item_seleccionado.get('Estado')
+
+                            if comp_sel and est_sel:
+                                # Filtramos la tabla general para que coincida con el clic
+                                df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada[comp_sel] == est_sel]
+                                st.success(f"🔎 Mostrando {len(df_tabla_filtrada)} postes donde el componente **{comp_sel}** tiene estado **{est_sel}**.")
+
+                if not filtro_activo:
+                    st.info("👆 Haz clic en cualquier barra del gráfico de 'Desglose' arriba para filtrar esta tabla.")
+
+                # Mostrar la tabla formateada y con colores
+                columnas_mostrar = ["ID_Doc", "Campaña", "Zona", "Derivación", "Poste", "Tipo Poste"] + comps_l + ["Obs_Final", "Act_Final"]
+                st.dataframe(
+                    df_tabla_filtrada[columnas_mostrar].style.map(color_estado, subset=comps_l), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
                 pass
                 
             with sub_pdf:
