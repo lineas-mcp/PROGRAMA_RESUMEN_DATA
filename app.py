@@ -757,88 +757,66 @@ if db:
                     st.write("") # Pequeño espacio
 
                     # ==========================================
-                    # 1. CREACIÓN DE LOS 4 GRÁFICOS INTERACTIVOS
+                    # DASHBOARD INTERACTIVO GLOBAL (CROSS-FILTERING)
                     # ==========================================
-                    col_dona, col_insp = st.columns(2)
-                    
-                    with col_dona:
-                        with st.container(border=True):
-                            st.markdown("**🍩 Salud General (Clic para filtrar tabla)**")
-                            resumen_estados = df_melt['Estado'].value_counts().reset_index()
-                            resumen_estados.columns = ['Estado', 'Cantidad']
-                            
-                            color_scale_pie = alt.Scale(domain=['A', 'M', 'B', 'NT'], range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6'])
-                            
-                            # Escuchador Dona
-                            sel_dona = alt.selection_point(fields=['Estado'])
-                            dona_chart = alt.Chart(resumen_estados).mark_arc(innerRadius=60).encode(
-                                theta=alt.Theta(field="Cantidad", type="quantitative"),
-                                color=alt.Color(field="Estado", type="nominal", scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="right")),
-                                opacity=alt.condition(sel_dona, alt.value(1.0), alt.value(0.3)),
-                                tooltip=['Estado', 'Cantidad']
-                            ).add_params(sel_dona)
-                            
-                            ev_dona = st.altair_chart(dona_chart, use_container_width=True, on_select="rerun")
+                    st.markdown("**🎛️ Panel de Control Interactivo** (Haz clic en cualquier gráfico para filtrar el resto y la tabla)")
 
-                    with col_insp:
-                        with st.container(border=True):
-                            st.markdown("**👷 Productividad (Clic en Inspector)**")
-                            insp_counts = df_graf['Inspector'].value_counts().reset_index()
-                            insp_counts.columns = ['Inspector', 'Postes']
-                            
-                            # Escuchador Inspector
-                            sel_insp = alt.selection_point(fields=['Inspector'])
-                            bar_insp = alt.Chart(insp_counts).mark_bar(color='#01305D').encode(
-                                x=alt.X('Postes:Q', title='Nº de Postes'),
-                                y=alt.Y('Inspector:N', sort='-x', title=''),
-                                opacity=alt.condition(sel_insp, alt.value(1.0), alt.value(0.3)),
-                                tooltip=['Inspector', 'Postes']
-                            ).add_params(sel_insp)
-                            
-                            ev_insp = st.altair_chart(bar_insp, use_container_width=True, on_select="rerun")
+                    if not df_melt.empty:
+                        # 1. Definir los "Selectores" (Las antenas que escuchan los clics)
+                        click_dona = alt.selection_point(fields=['Estado'])
+                        click_insp = alt.selection_point(fields=['Inspector'])
+                        click_comp = alt.selection_point(fields=['Componente'])
 
-                    st.write("") 
-                    col_g1, col_g2 = st.columns(2)
-                    
-                    with col_g1:
-                        with st.container(border=True):
-                            st.markdown("**📉 Top Componentes Críticos (Clic en Barra)**")
-                            df_problemas = df_melt[df_melt["Estado"].isin(["A", "M"])]
-                            
-                            if not df_problemas.empty:
-                                conteo_prob = df_problemas.groupby("Componente").size().reset_index(name="Fallas")
-                                
-                                # Escuchador Fallas
-                                sel_fallas = alt.selection_point(fields=['Componente'])
-                                bar_fallas = alt.Chart(conteo_prob).mark_bar(color='#CC0000').encode(
-                                    x=alt.X('Fallas:Q', title='Nº de Observaciones'),
-                                    y=alt.Y('Componente:N', sort='-x', title=''),
-                                    opacity=alt.condition(sel_fallas, alt.value(1.0), alt.value(0.3)),
-                                    tooltip=['Componente', 'Fallas']
-                                ).add_params(sel_fallas)
-                                
-                                ev_fallas = st.altair_chart(bar_fallas, use_container_width=True, on_select="rerun")
-                            else:
-                                st.success("✅ No se detectaron fallas 'Alto' o 'Medio'.")
-                                ev_fallas = None
+                        # 2. Definir los Colores
+                        color_scale = alt.Scale(domain=['A', 'M', 'B', 'NT'], range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6'])
 
-                    with col_g2:
+                        # 3. GRÁFICO 1: LA DONA (Estado General)
+                        base_dona = alt.Chart(df_melt).mark_arc(innerRadius=40).encode(
+                            theta=alt.Theta('count():Q', title="Cantidad"),
+                            color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
+                            tooltip=['Estado', alt.Tooltip('count()', title='Cantidad')],
+                            opacity=alt.condition(click_dona, alt.value(1.0), alt.value(0.3))
+                        ).add_params(click_dona).transform_filter(click_insp).transform_filter(click_comp).properties(title="Salud General (Clic Estado)", width=250, height=250)
+
+                        # 4. GRÁFICO 2: PRODUCTIVIDAD (Inspector)
+                        base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
+                            y=alt.Y('Inspector:N', sort='-x', title=''),
+                            x=alt.X('count(Poste):Q', title='Nº Evaluaciones'),
+                            tooltip=['Inspector', alt.Tooltip('count(Poste)', title='Evaluaciones')],
+                            opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
+                        ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_comp).properties(title="Productividad (Clic Inspector)", width=300, height=250)
+
+                        # 5. GRÁFICO 3: TOP FALLAS (Solo A y M)
+                        base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
+                            y=alt.Y('Componente:N', sort='-x', title=''),
+                            x=alt.X('count():Q', title='Nº Problemas'),
+                            tooltip=['Componente', alt.Tooltip('count()', title='Problemas')],
+                            opacity=alt.condition(click_comp, alt.value(1.0), alt.value(0.3))
+                        ).transform_filter(alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M'])).add_params(click_comp).transform_filter(click_dona).transform_filter(click_insp).properties(title="Top Componentes Críticos (A/M)", width=250, height=250)
+
+                        # 6. GRÁFICO 4: DESGLOSE TOTAL
+                        base_desglose = alt.Chart(df_melt).mark_bar().encode(
+                            y=alt.Y('Componente:N', sort='-x', title=''),
+                            x=alt.X('count():Q', title='Cantidad Total'),
+                            color=alt.Color('Estado:N', scale=color_scale, legend=None),
+                            tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
+                        ).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_comp).properties(title="Desglose por Componente", width=300, height=250)
+
+                        # 7. UNIR LOS GRÁFICOS (El Megagráfico)
+                        # Fila superior: Dona + Productividad
+                        fila_1 = alt.hconcat(base_dona, base_insp).resolve_scale(color='independent')
+                        # Fila inferior: Fallas + Desglose
+                        fila_2 = alt.hconcat(base_fallas, base_desglose).resolve_scale(color='independent')
+                        
+                        # Dashboard final
+                        dashboard_altair = alt.vconcat(fila_1, fila_2).resolve_scale(color='independent')
+
+                        # 8. RENDERIZAR EN STREAMLIT
                         with st.container(border=True):
-                            st.markdown("**📊 Desglose por Componente (Clic en Color)**")
-                            if not df_melt.empty:
-                                # Escuchador Desglose
-                                sel_desglose = alt.selection_point(fields=['Componente', 'Estado'])
-                                stacked_bar = alt.Chart(df_melt).mark_bar().encode(
-                                    x=alt.X('count():Q', title='Cantidad de Obs.'),
-                                    y=alt.Y('Componente:N', sort='-x', title=''),
-                                    color=alt.Color('Estado:N', scale=color_scale_pie, legend=alt.Legend(title="Estado", orient="bottom")),
-                                    opacity=alt.condition(sel_desglose, alt.value(1.0), alt.value(0.3)),
-                                    tooltip=[alt.Tooltip('Componente'), alt.Tooltip('Estado'), alt.Tooltip('count()', title='Cantidad')]
-                                ).add_params(sel_desglose)
-                                
-                                ev_desglose = st.altair_chart(stacked_bar, use_container_width=True, on_select="rerun")
-                            else:
-                                ev_desglose = None
+                            evento_clic = st.altair_chart(dashboard_altair, use_container_width=True, on_select="rerun")
+                    else:
+                        evento_clic = None
+                        st.info("No hay datos para graficar.")
 
                 # ==========================================
                 # 2. CEREBRO CENTRAL DE FILTROS (LA TABLA)
@@ -850,48 +828,27 @@ if db:
                 filtro_activo = False
 
                 # Verificamos qué gráfico disparó el clic analizando sus selecciones
-                
                 # A. Clic en la Dona (Estado General)
-                if ev_dona and ev_dona.selection:
-                    for val in ev_dona.selection.values():
-                        if len(val) > 0:
-                            est_sel = val[0].get('Estado')
-                            if est_sel:
-                                postes_afectados = df_melt[df_melt['Estado'] == est_sel]['Poste'].unique()
-                                df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada['Poste'].isin(postes_afectados)]
-                                st.success(f"🍩 Mostrando postes que tienen al menos un componente en estado **{est_sel}**.")
-                                filtro_activo = True
+                if evento_clic and evento_clic.selection and 'Estado' in evento_clic.selection:
+                    est_sel = evento_clic.selection['Estado'][0]
+                    postes_afectados = df_melt[df_melt['Estado'] == est_sel]['Poste'].unique()
+                    df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada['Poste'].isin(postes_afectados)]
+                    st.success(f"🍩 Mostrando postes que tienen al menos un componente en estado **{est_sel}**.")
+                    filtro_activo = True
 
                 # B. Clic en Productividad (Inspector)
-                elif ev_insp and ev_insp.selection and not filtro_activo:
-                    for val in ev_insp.selection.values():
-                        if len(val) > 0:
-                            insp_sel = val[0].get('Inspector')
-                            if insp_sel:
-                                df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada['Inspector'] == insp_sel]
-                                st.success(f"👷 Mostrando postes evaluados por el inspector **{insp_sel}**.")
-                                filtro_activo = True
+                elif evento_clic and evento_clic.selection and 'Inspector' in evento_clic.selection:
+                    insp_sel = evento_clic.selection['Inspector'][0]
+                    df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada['Inspector'] == insp_sel]
+                    st.success(f"👷 Mostrando postes evaluados por el inspector **{insp_sel}**.")
+                    filtro_activo = True
 
-                # C. Clic en Top Fallas (Componente)
-                elif ev_fallas and ev_fallas.selection and not filtro_activo:
-                    for val in ev_fallas.selection.values():
-                        if len(val) > 0:
-                            comp_sel = val[0].get('Componente')
-                            if comp_sel:
-                                df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada[comp_sel].isin(['A', 'M'])]
-                                st.success(f"📉 Mostrando postes con problemas (A o M) en el componente **{comp_sel}**.")
-                                filtro_activo = True
-
-                # D. Clic en Desglose (Componente + Estado)
-                elif ev_desglose and ev_desglose.selection and not filtro_activo:
-                    for val in ev_desglose.selection.values():
-                        if len(val) > 0:
-                            comp_sel = val[0].get('Componente')
-                            est_sel = val[0].get('Estado')
-                            if comp_sel and est_sel:
-                                df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada[comp_sel] == est_sel]
-                                st.success(f"📊 Mostrando postes donde el componente **{comp_sel}** tiene estado **{est_sel}**.")
-                                filtro_activo = True
+                # C. Clic en Componente (Top Fallas o Desglose)
+                elif evento_clic and evento_clic.selection and 'Componente' in evento_clic.selection:
+                    comp_sel = evento_clic.selection['Componente'][0]
+                    df_tabla_filtrada = df_tabla_filtrada[df_tabla_filtrada[comp_sel].isin(['A', 'M', 'B', 'NT'])]
+                    st.success(f"🔎 Filtrando por el componente **{comp_sel}**.")
+                    filtro_activo = True
 
                 if not filtro_activo:
                     st.info("👆 Haz clic en cualquier elemento de los 4 gráficos de arriba para aislar esos datos en esta tabla.")
