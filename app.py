@@ -772,14 +772,14 @@ if db:
                         color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
                         tooltip=['Estado', alt.Tooltip('count()', title='Componentes')],
                         opacity=alt.condition(click_dona, alt.value(1.0), alt.value(0.3))
-                    ).add_params(click_dona).transform_filter(filtro_relevantes).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud de Componentes (Sin N / NA)", width=650, height=350)
+                    ).add_params(click_dona).transform_filter(filtro_relevantes).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud de Componentes", width=650, height=350)
 
                     base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
                         y=alt.Y('Inspector:N', sort='-x', title=''),
                         x=alt.X('distinct(ID_Doc):Q', title='Nº Inspecciones Realizadas'),
                         tooltip=['Inspector', alt.Tooltip('distinct(ID_Doc):Q', title='Inspecciones')],
                         opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
-                    ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Todas las Inspecciones)", width=650, height=350)
+                    ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad", width=650, height=350)
 
                     base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
                         y=alt.Y('Componente:N', sort='-x', title=''),
