@@ -737,20 +737,28 @@ if db:
                 st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 
                 if not df_f.empty:
-                    # 1. PREPARACIÓN DE DATOS MAESTROS (🔥 AQUÍ AGREGAMOS ID_Doc)
+                    # ==========================================
+                    # 1. PREPARACIÓN DE DATOS MAESTROS (CORREGIDA)
+                    # ==========================================
                     df_graf = df_f[["ID_Doc", "Poste", "Inspector"] + comps_l].copy()
                     df_melt = df_graf.melt(id_vars=["ID_Doc", "Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
-                    df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])]
+                    
+                    # 🔥 LA CLAVE: No borramos nada. Solo limpiamos los textos.
+                    # Si borramos los "N" o "N/A", el poste desaparece de la gráfica y el inspector pierde esa cuenta.
+                    df_melt['Estado'] = df_melt['Estado'].fillna('N/A').astype(str).str.strip().str.upper()
+                    df_melt['Estado'] = df_melt['Estado'].replace({'NA': 'N/A', '': 'N/A', 'NONE': 'N/A'})
 
-                    total_postes = len(df_graf)
-                    postes_criticos = df_graf[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
+                    # Cálculos rápidos (Usamos df_f original para máxima precisión)
+                    total_postes = len(df_f) 
+                    postes_criticos = df_f[comps_l].apply(lambda row: 'A' in row.values, axis=1).sum() 
                     fallas_a = len(df_melt[df_melt["Estado"] == 'A'])
                     fallas_m = len(df_melt[df_melt["Estado"] == 'M'])
 
+                    # --- MARCO 1: KPIs ---
                     with st.container(border=True):
                         st.markdown("### 🎯 Indicadores Clave de Riesgo")
                         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                        kpi1.metric("📌 Total Postes Revisados", total_postes)
+                        kpi1.metric("📌 Total Postes Revisados", total_postes) # 👈 Aquí arriba ya saldrán los 13
                         kpi2.metric("🚨 Postes en Riesgo", postes_criticos)
                         kpi3.metric("🔴 Fallas Críticas", fallas_a)
                         kpi4.metric("🟠 Fallas Medias", fallas_m)
@@ -762,62 +770,63 @@ if db:
                     # ==========================================
                     st.markdown("**🎛️ Panel de Control Interactivo** (Haz clic en cualquier gráfico para filtrar el resto y la tabla)")
 
-                    if not df_melt.empty:
-                        # 1. Selectores
-                        click_dona = alt.selection_point(name='filtro_dona', fields=['Estado'])
-                        click_insp = alt.selection_point(name='filtro_insp', fields=['Inspector'])
-                        click_falla = alt.selection_point(name='filtro_falla', fields=['Componente'])
-                        click_desglose = alt.selection_point(name='filtro_desglose', fields=['Componente', 'Estado'])
+                    # 1. Selectores
+                    click_dona = alt.selection_point(name='filtro_dona', fields=['Estado'])
+                    click_insp = alt.selection_point(name='filtro_insp', fields=['Inspector'])
+                    click_falla = alt.selection_point(name='filtro_falla', fields=['Componente'])
+                    click_desglose = alt.selection_point(name='filtro_desglose', fields=['Componente', 'Estado'])
 
-                        color_scale = alt.Scale(domain=['A', 'M', 'B', 'NT'], range=['#CC0000', '#E67E22', '#2E7D32', '#95A5A6'])
+                    # 2. 🔥 NUEVA ESCALA DE COLORES (Incluyendo N y N/A)
+                    color_scale = alt.Scale(
+                        domain=['A', 'M', 'NT', 'B', 'N', 'N/A'], 
+                        range=['#CC0000', '#E67E22', '#E67E22', '#2E7D32', '#82E0AA', '#BDC3C7']
+                        # B = Verde Fuerte, N = Verde Claro, N/A = Plomo
+                    )
 
-                        # 3. GRÁFICO 1: LA DONA (Tamaño ampliado y radio mayor)
-                        base_dona = alt.Chart(df_melt).mark_arc(innerRadius=70, outerRadius=140).encode(
-                            theta=alt.Theta('count():Q', title="Cantidad de Componentes"),
-                            color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
-                            tooltip=['Estado', alt.Tooltip('count()', title='Componentes')],
-                            opacity=alt.condition(click_dona, alt.value(1.0), alt.value(0.3))
-                        ).add_params(click_dona).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud General (Clic Estado)", width=500, height=350)
+                    # 3. GRÁFICO 1: LA DONA
+                    base_dona = alt.Chart(df_melt).mark_arc(innerRadius=70, outerRadius=140).encode(
+                        theta=alt.Theta('count():Q', title="Cantidad de Componentes"),
+                        color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
+                        tooltip=['Estado', alt.Tooltip('count()', title='Componentes')],
+                        opacity=alt.condition(click_dona, alt.value(1.0), alt.value(0.3))
+                    ).add_params(click_dona).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud General (Clic Estado)", width=500, height=350)
 
-                        # 4. GRÁFICO 2: PRODUCTIVIDAD (Corrección a distinct Poste)
-                        base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
-                            y=alt.Y('Inspector:N', sort='-x', title=''),
-                            x=alt.X('distinct(ID_Doc):Q', title='Nº Inspecciones Realizadas'),
-                            tooltip=['Inspector', alt.Tooltip('distinct(ID_Doc):Q', title='Inspecciones')],
-                            opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
-                        ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Clic Inspector)", width=500, height=350)
-                        # 5. GRÁFICO 3: TOP FALLAS
-                        base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
-                            y=alt.Y('Componente:N', sort='-x', title=''),
-                            x=alt.X('count():Q', title='Nº Problemas (A/M)'),
-                            tooltip=['Componente', alt.Tooltip('count()', title='Problemas')],
-                            opacity=alt.condition(click_falla, alt.value(1.0), alt.value(0.3))
-                        ).transform_filter(alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M'])).add_params(click_falla).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_desglose).properties(title="Top Componentes Críticos (A/M)", width=500, height=350)
+                    # 4. GRÁFICO 2: PRODUCTIVIDAD (Usando el ID_Doc único)
+                    base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
+                        y=alt.Y('Inspector:N', sort='-x', title=''),
+                        # Contamos los ID únicos de Firebase para que sea exacto aunque haya postes con el mismo nombre
+                        x=alt.X('distinct(ID_Doc):Q', title='Nº Inspecciones Realizadas'),
+                        tooltip=['Inspector', alt.Tooltip('distinct(ID_Doc):Q', title='Inspecciones')],
+                        opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
+                    ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Clic Inspector)", width=500, height=350)
 
-                        # 6. GRÁFICO 4: DESGLOSE TOTAL
-                        base_desglose = alt.Chart(df_melt).mark_bar().encode(
-                            y=alt.Y('Componente:N', sort='-x', title=''),
-                            x=alt.X('count():Q', title='Cantidad Total de Componentes'),
-                            color=alt.Color('Estado:N', scale=color_scale, legend=None),
-                            opacity=alt.condition(click_desglose, alt.value(1.0), alt.value(0.3)),
-                            tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
-                        ).add_params(click_desglose).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose por Componente", width=500, height=350)
+                    # 5. GRÁFICO 3: TOP FALLAS
+                    base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
+                        y=alt.Y('Componente:N', sort='-x', title=''),
+                        x=alt.X('count():Q', title='Nº Problemas (A/M)'),
+                        tooltip=['Componente', alt.Tooltip('count()', title='Problemas')],
+                        opacity=alt.condition(click_falla, alt.value(1.0), alt.value(0.3))
+                    ).transform_filter(alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M'])).add_params(click_falla).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_desglose).properties(title="Top Componentes Críticos (A/M)", width=500, height=350)
 
-                        # 7. UNIR LOS GRÁFICOS (Con más espaciado para que llenen la pantalla)
-                        fila_1 = alt.hconcat(base_dona, base_insp, spacing=50).resolve_scale(color='independent')
-                        fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=50).resolve_scale(color='independent')
-                        
-                        dashboard_altair = alt.vconcat(fila_1, fila_2, spacing=50).resolve_scale(color='independent').configure_view(strokeWidth=0).configure_title(fontSize=16, anchor='middle')
+                    # 6. GRÁFICO 4: DESGLOSE TOTAL
+                    base_desglose = alt.Chart(df_melt).mark_bar().encode(
+                        y=alt.Y('Componente:N', sort='-x', title=''),
+                        x=alt.X('count():Q', title='Cantidad Total de Componentes'),
+                        color=alt.Color('Estado:N', scale=color_scale, legend=None),
+                        opacity=alt.condition(click_desglose, alt.value(1.0), alt.value(0.3)),
+                        tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
+                    ).add_params(click_desglose).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose por Componente", width=500, height=350)
 
-                        # 8. RENDERIZAR EN STREAMLIT
-                        with st.container(border=True):
-                            # Al centrarlo se ve mucho más corporativo
-                            col_centradora_1, col_grafico, col_centradora_2 = st.columns([1, 10, 1])
-                            with col_grafico:
-                                evento_clic = st.altair_chart(dashboard_altair, use_container_width=True, on_select="rerun")
-                    else:
-                        evento_clic = None
-                        st.info("No hay datos para graficar.")
+                    # 7. UNIR LOS GRÁFICOS
+                    fila_1 = alt.hconcat(base_dona, base_insp, spacing=50).resolve_scale(color='independent')
+                    fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=50).resolve_scale(color='independent')
+                    dashboard_altair = alt.vconcat(fila_1, fila_2, spacing=50).resolve_scale(color='independent').configure_view(strokeWidth=0).configure_title(fontSize=16, anchor='middle')
+
+                    # 8. RENDERIZAR EN STREAMLIT
+                    with st.container(border=True):
+                        col_centradora_1, col_grafico, col_centradora_2 = st.columns([1, 10, 1])
+                        with col_grafico:
+                            evento_clic = st.altair_chart(dashboard_altair, use_container_width=True, on_select="rerun")
 
                 # ==========================================
                 # 2. CEREBRO CENTRAL DE FILTROS (LA TABLA)
