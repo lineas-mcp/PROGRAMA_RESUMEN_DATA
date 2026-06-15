@@ -737,8 +737,9 @@ if db:
                 st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 
                 if not df_f.empty:
-                    df_graf = df_f[["Poste", "Inspector"] + comps_l].copy()
-                    df_melt = df_graf.melt(id_vars=["Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
+                    # 1. PREPARACIÓN DE DATOS MAESTROS (🔥 AQUÍ AGREGAMOS ID_Doc)
+                    df_graf = df_f[["ID_Doc", "Poste", "Inspector"] + comps_l].copy()
+                    df_melt = df_graf.melt(id_vars=["ID_Doc", "Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
                     df_melt = df_melt[df_melt["Estado"].isin(["A", "M", "B", "NT"])]
 
                     total_postes = len(df_graf)
@@ -781,12 +782,10 @@ if db:
                         # 4. GRÁFICO 2: PRODUCTIVIDAD (Corrección a distinct Poste)
                         base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
                             y=alt.Y('Inspector:N', sort='-x', title=''),
-                            # 🔥 AQUÍ ESTÁ LA CORRECCIÓN MÁGICA: distinct(Poste)
-                            x=alt.X('distinct(Poste):Q', title='Nº Postes Evaluados'),
-                            tooltip=['Inspector', alt.Tooltip('distinct(Poste):Q', title='Postes Evaluados')],
+                            x=alt.X('distinct(ID_Doc):Q', title='Nº Inspecciones Realizadas'),
+                            tooltip=['Inspector', alt.Tooltip('distinct(ID_Doc):Q', title='Inspecciones')],
                             opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
                         ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Clic Inspector)", width=500, height=350)
-
                         # 5. GRÁFICO 3: TOP FALLAS
                         base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
                             y=alt.Y('Componente:N', sort='-x', title=''),
