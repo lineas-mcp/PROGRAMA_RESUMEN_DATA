@@ -766,26 +766,27 @@ if db:
                     filtro_relevantes = alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M', 'NT', 'B'])
 
                     # Ajustamos tamaño (420x300) para que encaje perfecto con el tarjetero derecho
-                    base_dona = alt.Chart(df_melt).mark_arc(innerRadius=70, outerRadius=130).encode(
+                    # Ajustamos tamaño (Ancho: 650, Alto: 350) para aprovechar pantallas grandes
+                    base_dona = alt.Chart(df_melt).mark_arc(innerRadius=80, outerRadius=150).encode(
                         theta=alt.Theta('count():Q', title="Obs. Relevantes"),
                         color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
                         tooltip=['Estado', alt.Tooltip('count()', title='Componentes')],
                         opacity=alt.condition(click_dona, alt.value(1.0), alt.value(0.3))
-                    ).add_params(click_dona).transform_filter(filtro_relevantes).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud de Componentes (Sin N / NA)", width=420, height=300)
+                    ).add_params(click_dona).transform_filter(filtro_relevantes).transform_filter(click_insp).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Salud de Componentes (Sin N / NA)", width=650, height=350)
 
                     base_insp = alt.Chart(df_melt).mark_bar(color='#01305D').encode(
                         y=alt.Y('Inspector:N', sort='-x', title=''),
                         x=alt.X('distinct(ID_Doc):Q', title='Nº Inspecciones Realizadas'),
                         tooltip=['Inspector', alt.Tooltip('distinct(ID_Doc):Q', title='Inspecciones')],
                         opacity=alt.condition(click_insp, alt.value(1.0), alt.value(0.3))
-                    ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Todas las Inspecciones)", width=420, height=300)
+                    ).add_params(click_insp).transform_filter(click_dona).transform_filter(click_falla).transform_filter(click_desglose).properties(title="Productividad (Todas las Inspecciones)", width=650, height=350)
 
                     base_fallas = alt.Chart(df_melt).mark_bar(color='#CC0000').encode(
                         y=alt.Y('Componente:N', sort='-x', title=''),
                         x=alt.X('count():Q', title='Nº Problemas (A/M)'),
                         tooltip=['Componente', alt.Tooltip('count()', title='Problemas')],
                         opacity=alt.condition(click_falla, alt.value(1.0), alt.value(0.3))
-                    ).transform_filter(alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M'])).add_params(click_falla).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_desglose).properties(title="Top Componentes Críticos (A/M)", width=420, height=300)
+                    ).transform_filter(alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M'])).add_params(click_falla).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_desglose).properties(title="Top Componentes Críticos (A/M)", width=650, height=350)
 
                     base_desglose = alt.Chart(df_melt).mark_bar().encode(
                         y=alt.Y('Componente:N', sort='-x', title=''),
@@ -793,18 +794,19 @@ if db:
                         color=alt.Color('Estado:N', scale=color_scale, legend=None),
                         opacity=alt.condition(click_desglose, alt.value(1.0), alt.value(0.3)),
                         tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
-                    ).add_params(click_desglose).transform_filter(filtro_relevantes).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose de Hallazgos", width=420, height=300)
+                    ).add_params(click_desglose).transform_filter(filtro_relevantes).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose de Hallazgos", width=650, height=350)
 
-                    fila_1 = alt.hconcat(base_dona, base_insp, spacing=30).resolve_scale(color='independent')
-                    fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=30).resolve_scale(color='independent')
-                    dashboard_altair = alt.vconcat(fila_1, fila_2, spacing=40).resolve_scale(color='independent').configure_view(strokeWidth=0).configure_title(fontSize=16, anchor='middle')
+                    # Aumentamos el espaciado entre los gráficos para que respiren mejor
+                    fila_1 = alt.hconcat(base_dona, base_insp, spacing=50).resolve_scale(color='independent')
+                    fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=50).resolve_scale(color='independent')
+                    dashboard_altair = alt.vconcat(fila_1, fila_2, spacing=50).resolve_scale(color='independent').configure_view(strokeWidth=0).configure_title(fontSize=16, anchor='middle')
 
                     # ==========================================
                     # 2. RENDERIZADO Y CÁLCULO DINÁMICO (LA MAGIA)
                     # ==========================================
                     with st.container(border=True):
-                        # 80% para gráficos a la izquierda, 20% para KPIs a la derecha
-                        col_grafico, col_kpi = st.columns([4, 1])
+                        # Le damos más proporción a los gráficos [5] frente a los KPIs [1]
+                        col_grafico, col_kpi = st.columns([5, 1])
                         
                         with col_grafico:
                             evento_clic = st.altair_chart(dashboard_altair, use_container_width=True, on_select="rerun")
