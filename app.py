@@ -15,7 +15,7 @@ from datetime import datetime
 import io
 import numpy as np
 from folium.plugins import HeatMap
-from openpyxl.styles import PatternFill, Font, Alignment  # 👈 AGREGAMOS FONT Y ALIGNMENT AQUÍ
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl import load_workbook
 from io import BytesIO
 import math
@@ -332,7 +332,7 @@ if db:
     camps_totales = obtener_campanas()
     camps_pendientes = [c for c in camps_totales if c not in st.session_state.campanas_descargadas]
 
-    with st.expander("📦 Panel de Sincronización de Datos (Firebase)", expanded=True):
+    with st.expander("📦 Panel de Sincronización de Datos (Firebase) -- DEV. Johann Handel Cardenas Palacios", expanded=True):
         st.markdown(f"**✅ Campañas en Memoria:** {', '.join(st.session_state.campanas_descargadas) if st.session_state.campanas_descargadas else '*Ninguna*'} | **🚜 Gensets Descargados:** {'Sí' if st.session_state.gensets_descargados else 'No'}")
         
         c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
@@ -714,7 +714,7 @@ if db:
                         data=descargar_excel_formateado(df_f),
                         file_name=f"FOR-ELC-034_{camp_f}_{zona_f}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary" # Este saldrá resaltado (verde/azul según tu tema)
+                        type="primary" 
                     )
             else:
                 st.warning("⚠️ No hay datos con los filtros actuales para descargar.")
@@ -728,18 +728,11 @@ if db:
                 "🗺️", 
                 "📄"
             ])
-
-            # ------------------------------------------
-            # SUB-TAB B: ANALÍTICA Y KPIs (CON MARCOS / CARDS)
-            # ------------------------------------------
             with sub_analitica:
                 st.subheader("📊 Analítica de Inspección")
                 st.caption(f"Mostrando datos para: **{camp_f}** | Postes evaluados: **{len(df_f)}**")
                 
                 if not df_f.empty:
-                    # ==========================================
-                    # 1. PREPARACIÓN DE DATOS MAESTROS
-                    # ==========================================
                     df_graf = df_f[["ID_Doc", "Poste", "Inspector"] + comps_l].copy()
                     df_melt = df_graf.melt(id_vars=["ID_Doc", "Poste", "Inspector"], value_vars=comps_l, var_name="Componente", value_name="Estado")
                     
@@ -748,9 +741,6 @@ if db:
 
                     st.write("") 
 
-                    # ==========================================
-                    # DASHBOARD INTERACTIVO GLOBAL
-                    # ==========================================
                     st.markdown("**🎛️ Panel de Control Interactivo** (Haz clic en cualquier gráfico para filtrar los KPIs y la tabla)")
 
                     click_dona = alt.selection_point(name='filtro_dona', fields=['Estado'])
@@ -765,8 +755,6 @@ if db:
 
                     filtro_relevantes = alt.FieldOneOfPredicate(field='Estado', oneOf=['A', 'M', 'NT', 'B'])
 
-                    # Ajustamos tamaño (420x300) para que encaje perfecto con el tarjetero derecho
-                    # Ajustamos tamaño (Ancho: 650, Alto: 350) para aprovechar pantallas grandes
                     base_dona = alt.Chart(df_melt).mark_arc(innerRadius=80, outerRadius=150).encode(
                         theta=alt.Theta('count():Q', title="Obs. Relevantes"),
                         color=alt.Color('Estado:N', scale=color_scale, legend=alt.Legend(title="Estado", orient="right")),
@@ -795,7 +783,6 @@ if db:
                         opacity=alt.condition(click_desglose, alt.value(1.0), alt.value(0.3)),
                         tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
                     ).add_params(click_desglose).transform_filter(filtro_relevantes).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose de Hallazgos", width=650, height=350)
-
                     # Aumentamos el espaciado entre los gráficos para que respiren mejor
                     fila_1 = alt.hconcat(base_dona, base_insp, spacing=50).resolve_scale(color='independent')
                     fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=50).resolve_scale(color='independent')
@@ -805,13 +792,12 @@ if db:
                     # 2. RENDERIZADO Y CÁLCULO DINÁMICO (LA MAGIA)
                     # ==========================================
                     with st.container(border=True):
-                        # Le damos más proporción a los gráficos [5] frente a los KPIs [1]
+                    
                         col_grafico, col_kpi = st.columns([5, 1])
                         
                         with col_grafico:
                             evento_clic = st.altair_chart(dashboard_altair, use_container_width=True, on_select="rerun")
 
-                        # --- CEREBRO CENTRAL QUE LEE TU CLIC ---
                         df_tabla_filtrada = df_f.copy()
                         filtro_activo = False
 
@@ -940,7 +926,7 @@ if db:
                         # Insertar Gráficos
                         y_grafico = pdf.get_y()
                         pdf.image(img_buf, x=15, y=y_grafico, w=180)
-                        pdf.set_y(y_grafico + 75) # Bajamos el cursor debajo de los dibujos
+                        pdf.set_y(y_grafico + 75) 
 
                         # --- TABLAS DE DATOS (DEBAJO DE LOS GRÁFICOS) ---
                         pdf.set_font("Arial", "B", 8)
@@ -958,9 +944,9 @@ if db:
 
                         # Tabla Derecha (Ranking de Fallas) - La posicionamos al costado
                         if not df_probs.empty:
-                            pdf.set_y(y_tablas) # Volvemos arriba de la seccion de tablas
+                            pdf.set_y(y_tablas)
                             pdf.set_font("Arial", "B", 8)
-                            pdf.set_x(115) # Movemos a la derecha
+                            pdf.set_x(115)
                             pdf.cell(50, 6, "Componente Critico", 1, 0, 'C', fill=True)
                             pdf.cell(20, 6, "Fallas", 1, 1, 'C', fill=True)
                             pdf.set_font("Arial", "", 8)
@@ -1000,25 +986,21 @@ if db:
                         
                         # Concatenamos Poste y Derivación en una sola línea ancha
                         info_cab = f" POSTE: {fila['Poste']} | DERIVACION: {fila.get('Derivación', 'N/A')}"
-                        # multi_cell con ancho 0 ocupa todo el ancho y hace salto de línea automático
                         pdf.multi_cell(0, 8, info_cab, fill=True, align='L')
                         
-                        # FORZAMOS SALTO DE LÍNEA DESPUÉS DE LA BARRA
                         pdf.set_y(pdf.get_y() + 2) 
 
-                        # --- FUNCIÓN DE ESCRITURA BLINDADA ---
                         def escribir_seccion_segura(titulo, texto_campo):
                             if not str(texto_campo).strip() or str(texto_campo).lower() == "nan":
                                 return
                             
                             # Título de la sección (Hallazgos o Actividades)
-                            pdf.set_x(15) # Aseguramos margen izquierdo
+                            pdf.set_x(15)
                             pdf.set_text_color(0, 0, 0)
                             pdf.set_font("Arial", "B", 9)
-                            pdf.cell(0, 6, titulo, ln=True) # ln=True obliga a bajar al siguiente renglón
+                            pdf.cell(0, 6, titulo, ln=True)
                             
                             pdf.set_font("Arial", "", 8)
-                            # Limpieza de caracteres prohibidos
                             texto_limpio = str(texto_campo).replace("•", "-").replace("\u2022", "-")
                             
                             for linea in texto_limpio.split('\n'):
@@ -1037,7 +1019,6 @@ if db:
                                     pdf.set_x(20) # Indentación (sangría)
                                     
                                     # ESCRIBIMOS LA LÍNEA
-                                    # Usamos un ancho de 180 (seguro) y ln=True para que la siguiente línea vaya ABAJO
                                     pdf.multi_cell(0, 5, f"- {linea_s}", align='L')
                                     # Reseteo manual de X por seguridad
                                     pdf.set_x(15) 
@@ -1055,9 +1036,6 @@ if db:
 
                     return bytes(pdf.output())
 
-                # BOTÓN DE DESCARGA EN INTERFAZ (MEJORADO)
-                # ==========================================
-                # --- En tu Tab 1, desplázate hasta el final de la pestaña ---
                 st.divider()
                 st.subheader("📄 Generación de Reporte Técnico Oficial (PDF)")
                 st.caption("Este documento incluye resumen ejecutivo, analítica visual mejorada con flechas y desglose técnico agrupado por sub-sistema.")
@@ -1069,11 +1047,8 @@ if db:
                     if st.button("🛠️ Preparar Documento de Inspección PDF", type="secondary", use_container_width=True):
                         with st.spinner("Compilando datos, generando gráficos con flechas y formateando tabla agrupada..."):
                             try:
-                                # OJO: Usamos df_master total y df_f filtrado para pasar a la función
-                                # También le pasamos los textos de los selectores (camp_f, zona_f, der_f)
                                 pdf_bytes = generar_reporte_pdf(df_f, camp_f, zona_f, der_f, comps_l)
                                 
-                                # Guardamos los bytes en session_state para que no se borren en el siguiente rerun
                                 st.session_state.pdf_oficial_ready = pdf_bytes
                                 st.success("✅ Documento PDF listo para descarga.")
                             except Exception as e:
@@ -1089,7 +1064,7 @@ if db:
                             file_name=f"Reporte_Tecnico_{zona_f}_{camp_f}.pdf",
                             mime="application/pdf",
                             use_container_width=True,
-                            type="primary" # Botón verde
+                            type="primary"
                         )
                 pass
                 
@@ -1152,24 +1127,21 @@ if db:
 
                         # --- CONFIGURACIÓN DEL DECK (MAPA) ---
                         # Usamos estilos de Mapbox que simulan Google Maps (Satellite)
-                        # Nota: 'satellite' es muy útil para ver la ubicación real de las torres en la mina
                         map_style_url = f"mapbox://styles/mapbox/{estilo_mapa}-v9" if estilo_mapa != "road" else None
 
-                        # --- CONFIGURACIÓN DEL MAPA CON FOLIUM (100% GRATIS) ---
-                        # Usamos el satélite de ESRI que no requiere llaves ni tokens
+                        # --- CONFIGURACIÓN DEL MAPA CON FOLIUM
                         esri_tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                 
                         # 1. FIX DEL ZOOM: Agregamos max_zoom=17 para que no se borre el satélite
                         m = folium.Map(
                             location=[df_map['lat'].mean(), df_map['lon'].mean()],
                             zoom_start=15,
-                            max_zoom=17, # 👈 Tope de seguridad
+                            max_zoom=17, 
                             tiles=esri_tiles,
                             attr='Esri World Imagery'
                         )
 
-                        # 2. VERDADERO MAPA DE CALOR (Las manchas difuminadas)
-                        # Filtramos solo los postes que tienen algún riesgo según el Toolbox
+                        # 2. VERDADERO MAPA DE CALOR
                         df_calor = df_map[df_map['Riesgo_Total'] > 0]
                         if not df_calor.empty:
                             # Folium HeatMap pide una lista de [Latitud, Longitud, Peso/Criticidad]
@@ -1185,7 +1157,7 @@ if db:
 
                         # 3. PUNTOS INTERACTIVOS (Para poder hacer clic y leer el reporte)
                         for _, row in df_map.iterrows():
-                            # Hacemos los círculos más pequeños y oscuros para que resalten sobre el mapa de calor
+                            
                             color_borde = 'white' if row['Riesgo_Total'] >= 10 else 'black'
                             
                             tooltip_html = f"""
@@ -1200,7 +1172,7 @@ if db:
 
                             folium.CircleMarker(
                                 location=[row['lat'], row['lon']],
-                                radius=4, # Círculo más pequeño porque la mancha de calor ya indica el área
+                                radius=4, 
                                 color=color_borde,
                                 weight=1,
                                 fill=True,
