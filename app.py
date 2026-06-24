@@ -489,12 +489,42 @@ if db:
             with c3: 
                 opciones_der = sorted(df_f["Derivación"].unique().tolist())
                 
+                def set_todas_derivaciones(opciones, estado, camp):
+                    for opc in opciones:
+                        st.session_state[f"chk_{opc}_{camp}"] = estado
+
                 with st.expander("📝 Seleccionar Derivaciones"):
+                    col_ball, col_bnone = st.columns(2)
+                    with col_ball:
+                        st.button(
+                            "✅ Marcar Todo", 
+                            on_click=set_todas_derivaciones, 
+                            args=(opciones_der, True, camp_f),
+                            key=f"btn_all_{camp_f}", 
+                            use_container_width=True
+                        )
+                    with col_bnone:
+                        st.button(
+                            "⬜ Desmarcar", 
+                            on_click=set_todas_derivaciones, 
+                            args=(opciones_der, False, camp_f),
+                            key=f"btn_none_{camp_f}", 
+                            use_container_width=True
+                        )
+                    
+                    st.divider()
+
                     der_seleccionadas = []
                     for opc in opciones_der:
-                        if st.checkbox(opc, value=True, key=f"chk_{opc}_{camp_f}"):
+                        key_chk = f"chk_{opc}_{camp_f}"
+                        
+                        if key_chk not in st.session_state:
+                            st.session_state[key_chk] = True
+                            
+                        if st.checkbox(opc, key=key_chk):
                             der_seleccionadas.append(opc)
                 
+                # Aplicamos el filtro a la tabla
                 df_f = df_f[df_f["Derivación"].isin(der_seleccionadas)]
             
             comps_l = ["Estructura", "Aislador", "Cable", "Drenaje", "Ferreteria", "Guarda", "Inclinación", "PAT", "Pararrayos", "Retenida", "Seccionador","Señalética","Otros"]
@@ -684,8 +714,7 @@ if db:
             if not df_f.empty:
                 st.divider()
                 st.subheader("📥 Exportación de Datos (Excel)")
-                
-                # Creamos dos columnas para poner los botones lado a lado
+
                 col_btn1, col_btn2 = st.columns(2)
                 
                 # ==========================================
@@ -783,7 +812,6 @@ if db:
                         opacity=alt.condition(click_desglose, alt.value(1.0), alt.value(0.3)),
                         tooltip=['Componente', 'Estado', alt.Tooltip('count()', title='Cantidad')]
                     ).add_params(click_desglose).transform_filter(filtro_relevantes).transform_filter(click_dona).transform_filter(click_insp).transform_filter(click_falla).properties(title="Desglose de Hallazgos", width=650, height=350)
-                    # Aumentamos el espaciado entre los gráficos para que respiren mejor
                     fila_1 = alt.hconcat(base_dona, base_insp, spacing=50).resolve_scale(color='independent')
                     fila_2 = alt.hconcat(base_fallas, base_desglose, spacing=50).resolve_scale(color='independent')
                     dashboard_altair = alt.vconcat(fila_1, fila_2, spacing=50).resolve_scale(color='independent').configure_view(strokeWidth=0).configure_title(fontSize=16, anchor='middle')
